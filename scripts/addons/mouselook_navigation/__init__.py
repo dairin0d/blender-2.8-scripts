@@ -223,63 +223,6 @@ class MouselookNavigation_InputSettings:
                     layout.prop(self, "keys_fps_jump")
                     layout.prop(self, "keys_fps_teleport")
 
-@addon.Operator(idname="mouselook_navigation.navigate2", label="Mouselook navigation", description="Mouselook navigation", options={'GRAB_CURSOR', 'BLOCKING'})
-class MouselookNavigation2:
-    @classmethod
-    def poll(cls, context):
-        if not addon.preferences.is_enabled: return False
-        return (context.space_data.type == 'VIEW_3D')
-    
-    def modal(self, context, event):
-        curr_time = time.perf_counter()
-        diff_time = curr_time - self.last_time
-        if 1:#diff_time > 0.015:
-            print([f"{diff_time:.4f}", event.type, event.value])
-        self.last_time = curr_time
-        
-        mouse_prev = Vector((event.mouse_prev_x, event.mouse_prev_y))
-        mouse = Vector((event.mouse_x, event.mouse_y))
-        mouse_delta = mouse - mouse_prev
-        
-        dt = 0.01
-        rv3d = context.region_data
-        rot = rv3d.view_rotation
-        rot = Quaternion((0, 0, 1), -mouse_delta.x * 0.25 * dt) @ rot
-        rv3d.view_rotation = rot
-        rv3d.update()
-        
-        # dt = 0.01
-        # euler = self.sv.turntable_euler
-        # euler.z += 1 * dt
-        # self.sv.turntable_euler = euler
-        
-        #context.region.tag_redraw()
-        
-        if event.value != 'RELEASE':
-            return {'RUNNING_MODAL'}
-        else:
-            self.cleanup(context)
-            return {'CANCELLED'}
-    
-    def invoke(self, context, event):
-        self.sv = SmartView3D(context)
-        self.register_handlers(context)
-        self.last_time = time.perf_counter()
-        return {'RUNNING_MODAL'}
-    
-    def cleanup(self, context):
-        self.unregister_handlers(context)
-    
-    def register_handlers(self, context):
-        wm = context.window_manager
-        wm.modal_handler_add(self)
-        self._timer = addon.event_timer_add(0.01, context.window)
-        #self._handle_view = addon.draw_handler_add(bpy.types.SpaceView3D, draw_callback_view, (self, context), 'WINDOW', 'POST_VIEW')
-    
-    def unregister_handlers(self, context):
-        addon.remove(self._timer)
-        #addon.remove(self._handle_view)
-
 @addon.Operator(idname="mouselook_navigation.navigate", label="Mouselook navigation", description="Mouselook navigation", options={'GRAB_CURSOR', 'BLOCKING'})
 class MouselookNavigation:
     input_settings_id: 0 | prop("Input Settings ID", "Input Settings ID", min=0)
@@ -327,12 +270,6 @@ class MouselookNavigation:
         return (context.space_data.type == 'VIEW_3D')
     
     def modal(self, context, event):
-        curr_time = time.perf_counter()
-        diff_time = curr_time - self.last_time
-        if diff_time > 0.015:
-            print([f"{diff_time:.4f}", event.type, event.value])
-        self.last_time = curr_time
-        
         try:
             return self.modal_main(context, event)
         except:
@@ -1070,8 +1007,6 @@ class MouselookNavigation:
         # We need the view to redraw so that crosshair would appear
         # immediately after user presses MMB
         context.area.tag_redraw()
-        
-        self.last_time = time.perf_counter()
         
         return {'RUNNING_MODAL'}
     
