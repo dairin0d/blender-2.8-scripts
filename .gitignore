@@ -1,0 +1,4 @@
+*.pyc
+
+# Visual Studo Code cache/options directory
+.vscode/
