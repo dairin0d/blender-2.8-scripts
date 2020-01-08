@@ -554,7 +554,7 @@ class MouselookNavigation:
                 if abs_speed.magnitude > 0:
                     self.change_pos(abs_speed)
             
-            context.area.tag_redraw()
+            #context.area.tag_redraw()
         
         if self.explicit_orbit_origin is not None:
             pre_rotate_focus = m_ofs_inv @ self.pos
@@ -1047,9 +1047,10 @@ class MouselookNavigation:
         context.area.tag_redraw()
     
     def register_handlers(self, context):
+        addon_prefs = addon.preferences
         wm = context.window_manager
         wm.modal_handler_add(self)
-        self._timer = addon.event_timer_add(0.01, context.window)
+        self._timer = addon.event_timer_add(1.0/addon_prefs.animation_fps, context.window)
         self._handle_view = addon.draw_handler_add(bpy.types.SpaceView3D, draw_callback_view, (self, context), 'WINDOW', 'POST_VIEW')
     
     def unregister_handlers(self, context):
@@ -1427,6 +1428,8 @@ class ThisAddonPreferences:
     
     pass_through: False | prop("Non-blocking", "Other operators can be used while navigating")
     
+    animation_fps: 50.0 | prop("Animation timer FPS", "")
+    
     show_crosshair: True | prop("Show Crosshair", "Crosshair visibility")
     show_focus: True | prop("Show Orbit Center", "Orbit Center visibility")
     show_zbrush_border: True | prop("Show ZBrush border", "ZBrush border visibility")
@@ -1487,6 +1490,7 @@ class ThisAddonPreferences:
             layout.prop(self, "show_in_shelf")
             layout.prop(self, "show_in_header")
             layout.prop(self, "pass_through")
+            layout.prop(self, "animation_fps", text="FPS")
         
         with layout.row():
             with layout.column():
