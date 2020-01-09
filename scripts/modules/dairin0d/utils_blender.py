@@ -1212,11 +1212,66 @@ class ToggleObjectMode:
 #============================================================================#
 
 class MeshEquivalent:
+    # TODO: vertex groups? shape keys? face maps?
+    # They are extrinsic to a bmesh, and typically
+    # not needed for the purpose of baking.
+    # If they are actually needed, it's probably
+    # easier to just join the meshes.
+    
+    @classmethod
+    def bake(cls, target, objs, depsgraph, collection=None, **kwargs):
+        if isinstance(target, str):
+            mode = ('OBJ' if collection else 'MESH')
+            obj, mesh, name = None, None, target
+        elif isinstance(target, bpy.types.Mesh):
+            mode = 'MESH'
+            obj, mesh, name = None, target, None
+        elif isinstance(target, bpy.types.Object) and (target.type == 'MESH'):
+            mode = 'OBJ'
+            obj, mesh, name = target, target.data, None
+        else:
+            raise TypeError("target must be a string, a Mesh or a mesh Object")
+        
+        bm = bmesh.new()
+        kwargs.update(bm=bm, materials={}, target=mesh)
+        cls.gather(objs, depsgraph, **kwargs)
+        if not mesh: mesh = bpy.data.meshes.new(name)
+        bm.to_mesh(mesh) # erases all previous geometry
+        bm.free()
+        
+        materials = kwargs["materials"]
+        materials = {i: mat for mat, i in materials.items()}
+        mesh_materials = mesh.materials
+        mat_count_old = len(mesh_materials)
+        mat_count_new = len(materials)
+        
+        for i in range(min(mat_count_old, mat_count_new)):
+            mesh_materials[i] = materials[i]
+        
+        for i in range(mat_count_old, mat_count_new):
+            mesh_materials.append(materials[i])
+        
+        for i in range(mat_count_new, mat_count_old):
+            mesh_materials.pop()
+        
+        if mode == 'MESH': return mesh
+        
+        if not obj: obj = bpy.data.objects.new(name, mesh)
+        
+        try:
+            collection.objects.link(obj)
+        except RuntimeError:
+            pass
+        
+        return obj
+    
     @classmethod
     def gather(cls, objs, depsgraph, matrix=None, edit='CAGE', instances=True, **kwargs):
         if instances: objs = set(objs) # original (not evaluated) objects are expected here
         
         kwargs["depsgraph"] = depsgraph
+        
+        kwargs["add_to_lists"] = False
         
         add_obj = kwargs.get("add_obj")
         
@@ -1237,6 +1292,8 @@ class MeshEquivalent:
     
     @classmethod
     def _gather(cls, obj, depsgraph, edit, kwargs):
+        if obj.data and (obj.data == kwargs.get("target")): return
+        
         if obj.is_evaluated: return cls.get(obj, **kwargs)
         
         modifier_info = None
@@ -1244,9 +1301,12 @@ class MeshEquivalent:
         use_data = False
         
         if (obj.mode == 'EDIT') and edit:
-            if obj.type != 'MESH':
+            if (obj.type != 'MESH') or (edit != 'CAGE'):
                 use_data = True
-            elif edit == 'CAGE':
+            else:
+                # If we don't exit edit mode, obj.to_mesh(preserve_all_data_layers=True)
+                # will cause access violations, most of the time resulting in a crash
+                toggle_objmode = True
                 # Note: if object has modifiers with show_on_cage = True,
                 # the edit-mode elements will be displayed at the positions
                 # evaluated for the last modifier with show_on_cage = True
@@ -1284,7 +1344,7 @@ class MeshEquivalent:
         # source: evaluated object, original object, object data
         # verts, edges, polys, tris, poly_ids: for basic geometry
         # bm: for full information (if bm is specified, "basic" args are ignored)
-        # mats: materials
+        # materials: materials
         # matrix: matrix
         # depsgraph: can be specified for bm, if all layers data is needed
         if not source: return
@@ -1312,20 +1372,20 @@ class MeshEquivalent:
         bm = kwargs.get("bm")
         
         if bm:
-            mats = kwargs.get("mats")
-            if not isinstance(mats, (dict, list)):
-                mats = {}
-                kwargs["mats"] = mats
+            materials = kwargs.get("materials")
+            if not isinstance(materials, (dict, list)):
+                materials = {}
+                kwargs["materials"] = materials
             
             mat_ids = []
-            if isinstance(mats, dict):
+            if isinstance(materials, dict):
                 def mat_add(mat):
-                    id = mats.setdefault(mat, len(mats))
+                    id = materials.setdefault(mat, len(materials))
                     mat_ids.append(id)
             else:
                 def mat_add(mat):
-                    id = len(mats)
-                    mats.append(mat)
+                    id = len(materials)
+                    materials.append(mat)
                     mat_ids.append(id)
             
             verts = []
@@ -1354,7 +1414,7 @@ class MeshEquivalent:
             kwargs["poly_ids"] = []
         else:
             mat_ids = None
-            mat_add = cls._init_arg(kwargs, "mats")
+            mat_add = cls._init_arg(kwargs, "materials")
             vert_add = cls._init_arg(kwargs, "verts")
             edge_add = cls._init_arg(kwargs, "edges", "verts")
             tri_add = cls._init_arg(kwargs, "tris", "verts")
@@ -1411,6 +1471,9 @@ class MeshEquivalent:
     def _get_Object(cls, obj, extras):
         if obj.type in cls._convertible_obj_types:
             kwargs = extras["kwargs"]
+            
+            if obj.data == kwargs.get("target"): return
+            
             bm = extras["bm"]
             depsgraph = ((kwargs.get("depsgraph") or bpy.context.evaluated_depsgraph_get()) if bm else None)
             
@@ -1443,7 +1506,7 @@ class MeshEquivalent:
         elif extras["bm"]:
             bm0 = bmesh.new()
             bm0.from_mesh(mesh)
-            cls._get_Mesh_bmesh(bm0, extras)
+            cls._get_Mesh_bmesh(bm0, extras, mesh=mesh)
             bm0.free()
         else:
             cls._get_Mesh_mesh(mesh, extras)
@@ -1481,21 +1544,24 @@ class MeshEquivalent:
                     poly_id_add(tri.polygon_index)
     
     @classmethod
-    def _get_Mesh_bmesh(cls, bm0, extras):
+    def _get_Mesh_bmesh(cls, bm0, extras, mesh=None):
         bm = extras["bm"]
         
         if bm:
-            cls._get_Mesh_bmesh_full(bm, bm0, extras)
+            cls._get_Mesh_bmesh_full(bm, bm0, extras, mesh=mesh)
         else:
-            cls._get_Mesh_bmesh_basic(bm, bm0, extras)
+            cls._get_Mesh_bmesh_basic(bm0, extras)
     
     @classmethod
-    def _get_Mesh_bmesh_full(cls, bm, bm0, extras):
+    def _get_Mesh_bmesh_full(cls, bm, bm0, extras, mesh=None):
+        kwargs = extras["kwargs"]
+        
+        if mesh and (mesh == kwargs.get("target")): return
+        
+        mat_ids = extras["mat_ids"]
         convert_pos = extras["convert_pos"]
         update_normals = extras["update_normals"]
         copy_normals = not update_normals
-        mat_ids = extras["mat_ids"]
-        kwargs = extras["kwargs"]
         verts = kwargs["verts"]
         edges = kwargs["edges"]
         polys = kwargs["polys"]
@@ -1504,6 +1570,39 @@ class MeshEquivalent:
         edge_layers = cls._ensure_bmesh_layers(bm0.edges, bm.edges)
         face_layers = cls._ensure_bmesh_layers(bm0.faces, bm.faces)
         loop_layers = cls._ensure_bmesh_layers(bm0.loops, bm.loops)
+        
+        if mesh: # do this *after* ensure_bmesh_layers()
+            vert_count = len(mesh.vertices)
+            if vert_count == 0: return
+            
+            bm.from_mesh(mesh, face_normals=bool(update_normals))
+            
+            matrix = kwargs.get("matrix")
+            
+            # Note: bmesh element sequences can be sliced even without ensure_lookup_table()
+            if kwargs.get("add_to_lists", True):
+                edge_count = len(mesh.edges)
+                face_count = len(mesh.polygons)
+                verts_new = bm.verts[-vert_count:]
+                edges_new = bm.edges[-edge_count:]
+                faces_new = bm.faces[-face_count:]
+                verts.extend(verts_new)
+                edges.extend(edges_new)
+                polys.extend(faces_new)
+                
+                if matrix: bmesh.ops.transform(bm, matrix=matrix, space=Matrix(), verts=verts_new)
+                
+                for face in faces_new:
+                    face.material_index = mat_ids[face.material_index]
+            else:
+                if matrix: bmesh.ops.transform(bm, matrix=matrix, space=Matrix(), verts=bm.verts[-vert_count:])
+                
+                face_count = len(mesh.polygons)
+                if face_count > 0:
+                    for face in bm.faces[-face_count:]:
+                        face.material_index = mat_ids[face.material_index]
+            
+            return
         
         # In Blender 2.8, these problems STILL were not fixed :-(
         # * This will result in error (keyword "dest" type 4 not working yet!)
@@ -1516,6 +1615,8 @@ class MeshEquivalent:
         edges_new = bm.edges.new
         faces_new = bm.faces.new
         
+        copy_bmesh_layers = cls._copy_bmesh_layers
+        
         verts_map = {}
         for vS in bm0.verts:
             vD = verts_new(convert_pos(vS.co))
@@ -1523,8 +1624,7 @@ class MeshEquivalent:
             vD.hide = vS.hide
             vD.select = vS.select
             vD.tag = vS.tag
-            for layerS, layerD in vert_layers:
-                vD[layerD] = vS[layerS]
+            copy_bmesh_layers(vert_layers, vS, vD)
             verts_map[vS] = vD
             verts.append(vD)
         
@@ -1538,8 +1638,7 @@ class MeshEquivalent:
             eD.hide = eS.hide
             eD.select = eS.select
             eD.tag = eS.tag
-            for layerS, layerD in edge_layers:
-                eD[layerD] = eS[layerS]
+            copy_bmesh_layers(edge_layers, eS, eD)
             edges.append(eD)
         
         for fS in bm0.faces:
@@ -1553,12 +1652,26 @@ class MeshEquivalent:
             fD.hide = fS.hide
             fD.select = fS.select
             fD.tag = fS.tag
-            for layerS, layerD in face_layers:
-                fD[layerD] = fS[layerS]
+            copy_bmesh_layers(face_layers, fS, fD)
             for lS, lD in zip(fS.loops, fD.loops):
-                for layerS, layerD in loop_layers:
-                    lD[layerD] = lS[layerS]
+                copy_bmesh_layers(loop_layers, lS, lD)
             polys.append(fD)
+    
+    @classmethod
+    def _copy_bmesh_layers(cls, layers, elemS, elemD):
+        try:
+            for layerS, layerD in layers:
+                elemD[layerD] = elemS[layerS]
+            return
+        except AttributeError: # readonly / unsupported type
+            pass
+        
+        for i in range(len(layers)-1, -1, -1):
+            layerS, layerD = layers[i]
+            try:
+                elemD[layerD] = elemS[layerS]
+            except AttributeError: # readonly / unsupported type
+                layers.pop(i)
     
     @classmethod
     def _ensure_bmesh_layers(cls, seq_src, seq_dst):
@@ -1580,7 +1693,7 @@ class MeshEquivalent:
         return all_layers
     
     @classmethod
-    def _get_Mesh_bmesh_basic(cls, bm, bm0, extras):
+    def _get_Mesh_bmesh_basic(cls, bm0, extras):
         convert_pos = extras["convert_pos"]
         vert_add = extras["vert_add"]
         edge_add = extras["edge_add"]
@@ -1708,7 +1821,7 @@ class MeshEquivalent:
                     if stroke.draw_cyclic:
                         edge_add((v_start, vertex_count-1))
                 
-                if poly_add:
+                if poly_add and stroke.triangles:
                     poly_add(tuple(range(v_start, vertex_count)))
                 
                 if tri_add or poly_id_add:
