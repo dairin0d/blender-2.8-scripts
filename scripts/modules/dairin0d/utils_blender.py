@@ -611,7 +611,10 @@ class BlUtil:
             
             if objs is None: objs = depsgraph.objects
             
-            if not isinstance(objs, set): objs = set(objs)
+            if isinstance(objs, bpy.types.Object):
+                objs = {objs}
+            elif not isinstance(objs, set):
+                objs = set(objs)
             
             if originals:
                 for obj in objs:
@@ -1267,7 +1270,10 @@ class MeshEquivalent:
     
     @classmethod
     def gather(cls, objs, depsgraph, matrix=None, edit='CAGE', instances=True, **kwargs):
-        if instances: objs = set(objs) # original (not evaluated) objects are expected here
+        if isinstance(objs, bpy.types.Object):
+            objs = {objs}
+        elif instances:
+            objs = set(objs) # original (not evaluated) objects are expected here
         
         kwargs["depsgraph"] = depsgraph
         
@@ -1327,7 +1333,7 @@ class MeshEquivalent:
         
         with ToggleObjectMode(toggle_objmode):
             source = (obj.data if use_data else obj)
-            result = MeshEquivalent.get(source, **kwargs)
+            result = cls.get(source, **kwargs)
         
         if modifier_info:
             for md, show_viewport, show_render in modifier_info:

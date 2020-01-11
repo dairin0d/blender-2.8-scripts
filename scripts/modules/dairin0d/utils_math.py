@@ -420,3 +420,34 @@ def matrix_inverted_safe(m):
         return m.inverted()
     except ValueError:
         return Matrix()
+
+# See source/blender/blenlib/intern/math_geom.c
+def projection_matrix(left, right, bottom, top, near, far, perspective):
+    matrix = Matrix()
+    
+    x_delta = right - left
+    y_delta = top - bottom
+    z_delta = far - near
+    if not (x_delta and y_delta and z_delta): return
+    
+    matrix_col = matrix.col
+    
+    if perspective:
+        # perspective_m4(); matches glFrustum result
+        matrix_col[0][0] = near * 2.0 / x_delta
+        matrix_col[1][1] = near * 2.0 / y_delta
+        matrix_col[2][0] = (right + left) / x_delta
+        matrix_col[2][1] = (top + bottom) / y_delta
+        matrix_col[2][2] = -(far + near) / z_delta
+        matrix_col[2][3] = -1.0
+        matrix_col[3][2] = (-2.0 * near * far) / z_delta
+    else:
+        # orthographic_m4(); matches glOrtho result
+        matrix_col[0][0] = 2.0 / x_delta
+        matrix_col[3][0] = -(right + left) / x_delta
+        matrix_col[1][1] = 2.0 / y_delta
+        matrix_col[3][1] = -(top + bottom) / y_delta
+        matrix_col[2][2] = -2.0 / z_delta
+        matrix_col[3][2] = -(far + near) / z_delta
+    
+    return matrix
