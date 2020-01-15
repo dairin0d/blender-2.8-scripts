@@ -1166,10 +1166,10 @@ class BlEnums:
     
     object_modes = {item.identifier for item in bpy.types.Object.bl_rna.properties["mode"].enum_items}
     object_types = {item.identifier for item in bpy.types.Object.bl_rna.properties["type"].enum_items}
-    object_types_editable = {'MESH', 'CURVE', 'SURFACE', 'META', 'FONT', 'ARMATURE', 'LATTICE'}
+    object_types_editable = {'MESH', 'CURVE', 'SURFACE', 'META', 'FONT', 'ARMATURE', 'LATTICE', 'GPENCIL'}
     object_types_geometry = {'MESH', 'CURVE', 'SURFACE', 'META', 'FONT'}
-    object_types_with_modifiers = {'MESH', 'CURVE', 'SURFACE', 'FONT', 'LATTICE'}
-    object_types_with_vertices = {'MESH', 'CURVE', 'SURFACE', 'LATTICE'}
+    object_types_with_modifiers = {'MESH', 'CURVE', 'SURFACE', 'FONT', 'LATTICE', 'GPENCIL'}
+    object_types_with_vertices = {'MESH', 'CURVE', 'SURFACE', 'LATTICE', 'GPENCIL'}
     
     object_mode_support = {
         'MESH':{'OBJECT', 'EDIT', 'SCULPT', 'VERTEX_PAINT', 'WEIGHT_PAINT', 'TEXTURE_PAINT', 'PARTICLE_EDIT',

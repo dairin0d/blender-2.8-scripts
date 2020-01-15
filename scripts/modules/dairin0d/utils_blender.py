@@ -591,19 +591,37 @@ class BlUtil:
             return verts
         
         @staticmethod
-        def bounding_box(depsgraph, objs=None, matrix=None, origins='NON_GEOMETRY'):
-            points = BlUtil.Depsgraph.evaluated_vertices(depsgraph, objs, matrix, origins)
-            if not points: return (None, None)
-            x0, y0, z0 = points[0]
-            x1, y1, z1 = x0, y0, z0
-            for x, y, z in points:
-                x0 = min(x0, x)
-                y0 = min(y0, y)
-                z0 = min(z0, z)
-                x1 = max(x1, x)
-                y1 = max(y1, y)
-                z1 = max(z1, z)
-            return (Vector((x0, y0, z0)), Vector((x1, y1, z1)))
+        def bounding_box(depsgraph, objs=None, matrix=None, origins='NON_GEOMETRY', use_bbox=False):
+            if use_bbox:
+                geometry_types = {'MESH', 'CURVE', 'SURFACE', 'FONT', 'META', 'GPENCIL', 'LATTICE', 'ARMATURE'}
+                bbox0, bbox1 = None, None
+                for obj_main, obj_eval, instance_matrix in BlUtil.Depsgraph.evaluated_objects(objs, depsgraph):
+                    if (origins == 'NONE') and (obj_eval.type not in geometry_types): continue
+                    if matrix: instance_matrix = matrix @ instance_matrix
+                    _bbox0, _bbox1 = BlUtil.Object.bounding_box(obj_eval, instance_matrix)
+                    if bbox0 is None:
+                        bbox0, bbox1 = _bbox0, _bbox1
+                    else:
+                        bbox0.x = min(bbox0.x, _bbox0.x)
+                        bbox0.y = min(bbox0.y, _bbox0.y)
+                        bbox0.z = min(bbox0.z, _bbox0.z)
+                        bbox1.x = max(bbox1.x, _bbox1.x)
+                        bbox1.y = max(bbox1.y, _bbox1.y)
+                        bbox1.z = max(bbox1.z, _bbox1.z)
+                return bbox0, bbox1
+            else:
+                points = BlUtil.Depsgraph.evaluated_vertices(depsgraph, objs, matrix, origins)
+                if not points: return (None, None)
+                x0, y0, z0 = points[0]
+                x1, y1, z1 = x0, y0, z0
+                for x, y, z in points:
+                    x0 = min(x0, x)
+                    y0 = min(y0, y)
+                    z0 = min(z0, z)
+                    x1 = max(x1, x)
+                    y1 = max(y1, y)
+                    z1 = max(z1, z)
+                return (Vector((x0, y0, z0)), Vector((x1, y1, z1)))
         
         @staticmethod
         def evaluated_objects(objs=None, depsgraph=None, originals=True, instances=True):
@@ -1244,32 +1262,34 @@ class MeshEquivalent:
         
         materials = kwargs["materials"]
         materials = {i: mat for mat, i in materials.items()}
-        mesh_materials = mesh.materials
-        mat_count_old = len(mesh_materials)
+        mat_count_old = len(mesh.materials)
         mat_count_new = len(materials)
         
         for i in range(min(mat_count_old, mat_count_new)):
-            mesh_materials[i] = materials[i]
+            mesh.materials[i] = materials[i]
         
         for i in range(mat_count_old, mat_count_new):
-            mesh_materials.append(materials[i])
+            mesh.materials.append(materials[i])
         
         for i in range(mat_count_new, mat_count_old):
-            mesh_materials.pop()
+            mesh.materials.pop()
         
         if mode == 'MESH': return mesh
         
         if not obj: obj = bpy.data.objects.new(name, mesh)
         
-        try:
-            collection.objects.link(obj)
-        except RuntimeError:
-            pass
+        if collection:
+            try:
+                collection.objects.link(obj)
+            except RuntimeError:
+                pass
         
         return obj
     
     @classmethod
     def gather(cls, objs, depsgraph, matrix=None, edit='CAGE', instances=True, **kwargs):
+        # edit: NONE, DATA, CAGE (None/False are also accepted)
+        
         if isinstance(objs, bpy.types.Object):
             objs = {objs}
         elif instances:
@@ -1300,13 +1320,16 @@ class MeshEquivalent:
     def _gather(cls, obj, depsgraph, edit, kwargs):
         if obj.data and (obj.data == kwargs.get("target")): return
         
+        obj_types = kwargs.get("obj_types")
+        if obj_types and (obj.type not in obj_types): return
+        
         if obj.is_evaluated: return cls.get(obj, **kwargs)
         
         modifier_info = None
         toggle_objmode = False
         use_data = False
         
-        if (obj.mode == 'EDIT') and edit:
+        if (obj.mode == 'EDIT') and edit and (edit != 'NONE'):
             if (obj.type != 'MESH') or (edit != 'CAGE'):
                 use_data = True
             else:
@@ -1463,6 +1486,7 @@ class MeshEquivalent:
         if mat_add:
             has_mats = False
             for mat in mats_iterable:
+                if mat: mat = mat.original # important!
                 mat_add(mat)
                 has_mats = True
             
@@ -1577,16 +1601,21 @@ class MeshEquivalent:
         face_layers = cls._ensure_bmesh_layers(bm0.faces, bm.faces)
         loop_layers = cls._ensure_bmesh_layers(bm0.loops, bm.loops)
         
+        mat_ids_max = len(mat_ids)-1
+        def remap_mat_id(mat_id):
+            return mat_ids[min(max(mat_id, 0), mat_ids_max)]
+        
         if mesh: # do this *after* ensure_bmesh_layers()
             vert_count = len(mesh.vertices)
             if vert_count == 0: return
             
-            bm.from_mesh(mesh, face_normals=bool(update_normals))
-            
             matrix = kwargs.get("matrix")
             
-            # Note: bmesh element sequences can be sliced even without ensure_lookup_table()
             if kwargs.get("add_to_lists", True):
+                bm.from_mesh(mesh, face_normals=bool(update_normals))
+                
+                # Note: bmesh element sequences can be sliced even without ensure_lookup_table()
+                # BUT: it still seems to be an O(N) operation
                 edge_count = len(mesh.edges)
                 face_count = len(mesh.polygons)
                 verts_new = bm.verts[-vert_count:]
@@ -1599,14 +1628,22 @@ class MeshEquivalent:
                 if matrix: bmesh.ops.transform(bm, matrix=matrix, space=Matrix(), verts=verts_new)
                 
                 for face in faces_new:
-                    face.material_index = mat_ids[face.material_index]
+                    face.material_index = remap_mat_id(face.material_index)
             else:
-                if matrix: bmesh.ops.transform(bm, matrix=matrix, space=Matrix(), verts=bm.verts[-vert_count:])
+                # When baking many objects, modifying a temporary mesh is much faster
+                # than slicing a bmesh (O(bm0.verts) vs O(bm.verts)) and faster
+                # than copying bmesh elements manually (and might use less memory).
+                mesh = bpy.data.meshes.new("TemporaryMesh")
+                bm0.to_mesh(mesh)
                 
-                face_count = len(mesh.polygons)
-                if face_count > 0:
-                    for face in bm.faces[-face_count:]:
-                        face.material_index = mat_ids[face.material_index]
+                if matrix: mesh.transform(matrix)
+                
+                for face in mesh.polygons:
+                    face.material_index = remap_mat_id(face.material_index)
+                
+                bm.from_mesh(mesh, face_normals=bool(update_normals))
+                
+                bpy.data.meshes.remove(mesh)
             
             return
         
@@ -1653,7 +1690,7 @@ class MeshEquivalent:
             except ValueError: # face already exists
                 continue
             if copy_normals: fD.normal = Vector(fS.normal)
-            fD.material_index = mat_ids[fS.material_index]
+            fD.material_index = remap_mat_id(fS.material_index)
             fD.smooth = fS.smooth
             fD.hide = fS.hide
             fD.select = fS.select
