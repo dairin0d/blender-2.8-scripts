@@ -22,8 +22,8 @@ bl_info = {
     "version": (1, 2, 0),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
-    "description": "Alternative 3D view navigation",
-    "warning": "Not fully tested yet",
+    "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
+    "warning": "Beta version",
     "wiki_url": "",
     "tracker_url": "",
     "category": "3D View"
@@ -1421,6 +1421,11 @@ class NavigationDirectionFlip:
 
 @addon.Preferences.Include
 class ThisAddonPreferences:
+    prefs_tab: bpy.props.EnumProperty(name="Tab", description="Which tab to show in addon preferences", items=[
+        ('SETTINGS', "Settings", "Settings"),
+        ('ABOUT', "About", "About"),
+    ], default='SETTINGS')
+    
     is_enabled: True | prop("Enable/disable Mouselook Navigation", "")
     
     show_in_shelf: True | prop("Show in shelf", f"Show a panel in the 3D view's shelf ('View' tab)")
@@ -1428,7 +1433,7 @@ class ThisAddonPreferences:
     
     pass_through: False | prop("Non-blocking", "Other operators can be used while navigating")
     
-    animation_fps: 50.0 | prop("Animation timer FPS", "")
+    animation_fps: 50.0 | prop("Animation timer FPS", "Animation timer FPS")
     
     show_crosshair: True | prop("Show Crosshair", "Crosshair visibility")
     show_focus: True | prop("Show Orbit Center", "Orbit Center visibility")
@@ -1481,6 +1486,27 @@ class ThisAddonPreferences:
     autolevel_speed_modifier: 0.0 | prop("Autolevel speed", "Autoleveling speed", min=0.0)
     
     def draw(self, context):
+        layout = self.layout
+        row = layout.row()
+        row.prop_tabs_enum(self, "prefs_tab")
+        if self.prefs_tab == 'ABOUT':
+            self.draw_about(context)
+        else:
+            self.draw_settings(context)
+    
+    def draw_about(self, context):
+        layout = self.layout
+        row = layout.row()
+        col = row.column()
+        col.label(text="Official:")
+        col.operator("wm.url_open", text="BATCH TOOLS™ 2 Store").url = "https://www.moth3r.com"
+        col.operator("wm.url_open", text="Documentation").url = ""
+        col = row.column()
+        col.label(text="Recommended:")
+        col.operator("wm.url_open", text="MasterXeon1001 addons").url = "https://gumroad.com/masterxeon1001"
+        col.operator("wm.url_open", text="MACHIN3 tools").url = "https://machin3.io/"
+    
+    def draw_settings(self, context):
         layout = NestedLayout(self.layout)
         
         use_universal_input_settings = (self.use_universal_input_settings or len(self.autoreg_keymaps) == 0)
