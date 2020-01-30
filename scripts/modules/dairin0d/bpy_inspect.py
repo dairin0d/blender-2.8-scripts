@@ -437,6 +437,12 @@ class BpyData:
         return getattr(bpy.data, cls.bpy_type_to_data[bpy_type])
 
 class BpyOp:
+    @staticmethod
+    def convert(idname, py):
+        op_parts = (idname.split(".") if "." in idname else idname.rsplit("_OT_", 1))
+        if py: return f"{op_parts[-2].lower()}.{op_parts[-1].lower()}"
+        return f"{op_parts[-2].upper()}_OT_{op_parts[-1].lower()}"
+    
     def __new__(cls, op):
         if isinstance(op, BpyOp): return op # just in case
         
@@ -468,6 +474,8 @@ class BpyOp:
 
 class BpyProp:
     """Utility class for easy inspection/modification of bpy properties"""
+    
+    base_type = type(bpy.props.BoolProperty) # builtin_function_or_method
     
     # I have no idea how to get the default values using reflection
     # (it seems like bpy.props.* functions have no python-accessible signature)
@@ -545,6 +553,7 @@ class BpyProp:
     def validate(value):
         """Test whether a given object is a bpy property"""
         return (isinstance(value, tuple) and (len(value) == 2) and
+                isinstance(value[0], BpyProp.base_type) and # make sure it's a hashable type
                 (value[0] in BpyProp.known) and isinstance(value[1], dict))
     
     @staticmethod

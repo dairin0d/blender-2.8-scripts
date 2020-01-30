@@ -25,8 +25,8 @@ import itertools
 
 def divide():
     from math import copysign
-    inf = float("inf")
-    nan = float("nan")
+    inf = math.inf
+    nan = math.nan
     def divide(x, y):
         try:
             return x / y

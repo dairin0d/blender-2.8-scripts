@@ -31,6 +31,7 @@ from mathutils.geometry import intersect_line_sphere
 
 from .utils_math import matrix_compose, matrix_inverted_safe, transform_point_normal
 from .utils_python import attrs_to_dict
+from .bpy_inspect import BlRna
 
 # =========================================================================== #
 
@@ -564,6 +565,25 @@ class BlUtil:
             for child_coll in coll.children:
                 BlUtil.Collection.all_children(child_coll, result)
             return result
+        
+        @staticmethod
+        def contains(coll, value, recursive=False):
+            # Note: as of Blender 2.80, bpy collections support only string key lookup
+            if not value: return False
+            if isinstance(value, bpy.types.Collection):
+                def search(coll):
+                    if coll.children.get(value.name) == value: return True
+                    for child in coll.children:
+                        if child == value: return True
+                        if recursive and search(child): return True
+                    return False
+                return search(coll)
+            elif isinstance(value, bpy.types.Object):
+                objs = (coll.all_objects if recursive else coll.objects)
+                if objs.get(value.name) == value: return True
+                for obj in objs:
+                    if obj == value: return True
+            return False
     
     class Depsgraph:
         @staticmethod
