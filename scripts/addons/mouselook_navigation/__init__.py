@@ -24,8 +24,8 @@ bl_info = {
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
     "warning": "Beta version",
-    "wiki_url": "",
-    "tracker_url": "",
+    "wiki_url": "https://github.com/dairin0d/blender-2.8-scripts/blob/master/docs/mouselook_navigation/mouselook_navigation.md",
+    "tracker_url": "https://github.com/dairin0d/blender-2.8-scripts/issues/new?labels=mouselook+navigation",
     "category": "3D View"
 }
 
@@ -189,39 +189,44 @@ class MouselookNavigation_InputSettings:
     def draw(self, layout):
         with layout.split(factor=0.15):
             with layout.column():
-                layout.prop(self, "allowed_transitions")
-            with layout.row():
+                layout.label(text="Transitions:")
                 with layout.column():
-                    layout.prop(self, "default_mode")
-                    layout.prop(self, "ortho_unrotate", toggle=True)
-                    layout.prop(self, "independent_modes", toggle=True)
-                    layout.prop(self, "zbrush_mode", toggle=True)
-                    #layout.label() # just an empty line
-                    layout.prop(self, "keys_rotmode_switch")
-                    layout.prop(self, "keys_origin_mouse")
-                    layout.prop(self, "keys_origin_selection")
-                    layout.prop(self, "keys_orbit")
-                    layout.prop(self, "keys_orbit_snap")
-                    layout.prop(self, "keys_pan")
-                    layout.prop(self, "keys_dolly")
-                    layout.prop(self, "keys_zoom")
-                    layout.prop(self, "keys_fly")
-                    layout.prop(self, "keys_fps")
-                with layout.column():
-                    layout.prop(self, "keys_confirm")
-                    layout.prop(self, "keys_cancel")
-                    layout.label() # just an empty line
-                    layout.prop(self, "keys_FPS_forward")
-                    layout.prop(self, "keys_FPS_back")
-                    layout.prop(self, "keys_FPS_left")
-                    layout.prop(self, "keys_FPS_right")
-                    layout.prop(self, "keys_FPS_up")
-                    layout.prop(self, "keys_FPS_down")
-                    layout.prop(self, "keys_fps_acceleration")
-                    layout.prop(self, "keys_fps_slowdown")
-                    layout.prop(self, "keys_fps_crouch")
-                    layout.prop(self, "keys_fps_jump")
-                    layout.prop(self, "keys_fps_teleport")
+                    layout.prop(self, "allowed_transitions")
+            
+            with layout.column():
+                layout.label(text="Navigation shortcuts:")
+                with layout.row():
+                    with layout.column():
+                        layout.prop(self, "default_mode")
+                        layout.prop(self, "ortho_unrotate", toggle=True)
+                        layout.prop(self, "independent_modes", toggle=True)
+                        layout.prop(self, "zbrush_mode", toggle=True)
+                        #layout.label() # just an empty line
+                        layout.prop(self, "keys_rotmode_switch")
+                        layout.prop(self, "keys_origin_mouse")
+                        layout.prop(self, "keys_origin_selection")
+                        layout.prop(self, "keys_orbit")
+                        layout.prop(self, "keys_orbit_snap")
+                        layout.prop(self, "keys_pan")
+                        layout.prop(self, "keys_dolly")
+                        layout.prop(self, "keys_zoom")
+                        layout.prop(self, "keys_fly")
+                        layout.prop(self, "keys_fps")
+                    with layout.column():
+                        layout.prop(self, "keys_confirm")
+                        layout.prop(self, "keys_cancel")
+                        layout.label() # just an empty line
+                        layout.prop(self, "keys_FPS_forward")
+                        layout.prop(self, "keys_FPS_back")
+                        layout.prop(self, "keys_FPS_left")
+                        layout.prop(self, "keys_FPS_right")
+                        layout.prop(self, "keys_FPS_up")
+                        layout.prop(self, "keys_FPS_down")
+                        layout.prop(self, "keys_fps_acceleration")
+                        layout.prop(self, "keys_fps_slowdown")
+                        layout.prop(self, "keys_fps_crouch")
+                        layout.prop(self, "keys_fps_jump")
+                        layout.prop(self, "keys_fps_teleport")
 
 @addon.Operator(idname="mouselook_navigation.navigate", label="Mouselook navigation", description="Mouselook navigation", options={'GRAB_CURSOR', 'BLOCKING'})
 class MouselookNavigation:
@@ -1500,7 +1505,7 @@ class ThisAddonPreferences:
         col = row.column()
         col.label(text="Official:")
         col.operator("wm.url_open", text="BATCH TOOLS™ 2 Store").url = "https://www.moth3r.com"
-        col.operator("wm.url_open", text="Documentation").url = ""
+        col.operator("wm.url_open", text="Documentation").url = "http://gum.co/mouselook"
         col = row.column()
         col.label(text="Recommended:")
         col.operator("wm.url_open", text="MasterXeon1001 addons").url = "https://gumroad.com/masterxeon1001"
@@ -1511,36 +1516,40 @@ class ThisAddonPreferences:
         
         use_universal_input_settings = (self.use_universal_input_settings or len(self.autoreg_keymaps) == 0)
         
-        with layout.row()(alignment='LEFT'):
-            layout.prop(self, "is_enabled", text="Enabled")
-            layout.prop(self, "show_in_shelf")
-            layout.prop(self, "show_in_header")
-            layout.prop(self, "pass_through")
-            layout.prop(self, "animation_fps", text="FPS")
+        layout.label(text="General settings:")
         
-        with layout.row():
-            with layout.column():
-                layout.prop(self, "zbrush_radius")
-                layout.prop(self, "show_zbrush_border")
-                layout.prop(self, "show_crosshair")
-                layout.prop(self, "show_focus")
-            with layout.column():
-                with layout.row():
-                    layout.prop_menu_enum(self, "zbrush_method")
-                    layout.prop(self, "use_blender_colors")
-                with layout.column()(active=not self.use_blender_colors):
-                    layout.row().prop(self, "color_zbrush_border")
-                    layout.row().prop(self, "color_crosshair_visible")
-                    layout.row().prop(self, "color_crosshair_obscured")
+        with layout.box():
+            with layout.row()(alignment='LEFT'):
+                layout.prop(self, "is_enabled", text="Enabled")
+                layout.prop(self, "show_in_shelf")
+                layout.prop(self, "show_in_header")
+                layout.prop(self, "pass_through")
+                layout.prop(self, "animation_fps", text="FPS")
+            
+            with layout.row():
+                with layout.column():
+                    layout.prop(self, "zbrush_radius")
+                    layout.prop(self, "show_zbrush_border")
+                    layout.prop(self, "show_crosshair")
+                    layout.prop(self, "show_focus")
+                with layout.column():
+                    with layout.row():
+                        layout.prop_menu_enum(self, "zbrush_method")
+                        layout.prop(self, "use_blender_colors")
+                    with layout.column()(active=not self.use_blender_colors):
+                        layout.row().prop(self, "color_zbrush_border")
+                        layout.row().prop(self, "color_crosshair_visible")
+                        layout.row().prop(self, "color_crosshair_obscured")
+            
+            with layout.row(align=True):
+                self.flips.draw(layout)
         
-        with layout.row(align=True):
-            self.flips.draw(layout)
+        layout.label(text="Auto-registered keymaps:")
         
         with layout.box():
             with layout.row():
-                layout.label(text="Auto-registered keymaps:")
-                layout.operator("mouselook_navigation.autoreg_keymap_add", text="Add", icon='ADD')
-                layout.operator("mouselook_navigation.autoreg_keymaps_update", text="Update", icon='FILE_REFRESH')
+                layout.operator("mouselook_navigation.autoreg_keymap_add", text="Add Keymap", icon='ADD')
+                layout.operator("mouselook_navigation.autoreg_keymaps_update", text="Update Keymaps", icon='FILE_REFRESH')
                 AutoregKeymapPreset.draw_popup(layout, text="Load Preset", icon='PRESET')
             
             autoreg_keymaps = self.autoreg_keymaps
@@ -1567,6 +1576,8 @@ class ThisAddonPreferences:
                         layout.prop(ark, "insert_after", text="")
                         layout.label(icon='ARROW_LEFTRIGHT')
                         layout.prop(ark, "insert_before", text="")
+        
+        layout.label(text="Transitions and navigation shortcuts:")
         
         with layout.box():
             if use_universal_input_settings:
