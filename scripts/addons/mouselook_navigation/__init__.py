@@ -1473,8 +1473,11 @@ class ThisAddonPreferences:
     # However, since zbuffer is a much less viable option in Blender 2.80,
     # we have to use raycasts (which are slow at big zbrush_radius) or selection.
     zbrush_radius: 0 | prop("ZBrush radius", "Minimal required distance (in pixels) to the nearest geometry", min=0, max=64)
-    zbrush_method: 'SELECTION' | prop("ZBrush method", "Which method to use to determine if mouse is over empty space",
-        items=[('RAYCAST', "Raycast"), ('ZBUFFER', "Z-buffer"), ('SELECTION', "Selection")])
+    zbrush_method: 'SELECTION' | prop("ZBrush method", "Which method to use to determine if mouse is over empty space", items=[
+        ('RAYCAST', "Raycast"),
+        ('SELECTION', "Selection"),
+        # ('ZBUFFER', "Z-buffer"),
+    ])
     
     flips: NavigationDirectionFlip | prop()
     
@@ -1483,7 +1486,11 @@ class ThisAddonPreferences:
     fps_speed_modifier: 1.0 | prop("FPS speed", "FPS movement speed")
     fps_horizontal: False | prop("FPS horizontal", "Force forward/backward to be in horizontal plane, and up/down to be vertical")
     zoom_to_selection: True | prop("Zoom to selection", "Zoom to selection when Rotate Around Selection is enabled")
-    trackball_mode: 'WRAPPED' | prop("Trackball mode", "Rotation algorithm used in trackball mode", items=[('BLENDER', 'Blender', 'Blender (buggy!)', 'ERROR'), ('WRAPPED', 'Wrapped'), ('CENTER', 'Center')])
+    trackball_mode: 'WRAPPED' | prop("Trackball mode", "Rotation algorithm used in trackball mode", items=[
+        ('BLENDER', 'Blender', 'Blender (buggy!)', 'ERROR'),
+        ('WRAPPED', 'Wrapped'),
+        ('CENTER', 'Center'),
+    ])
     rotation_snap_subdivs: 2 | prop("Orbit snap subdivs", "Intermediate angles used when snapping (1: 90°, 2: 45°, 3: 30°, etc.)", min=1)
     rotation_snap_autoperspective: True | prop("Orbit snap->ortho", "If Auto Perspective is enabled, rotation snapping will automatically switch the view to Ortho")
     autolevel_trackball: False | prop("Trackball Autolevel", "Autolevel in Trackball mode")
