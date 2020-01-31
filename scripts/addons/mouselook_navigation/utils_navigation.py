@@ -70,9 +70,6 @@ def calc_selection_center(context, non_obj_zero=False): # View3D area is assumed
                         positions.append(point.handle_left)
                     if point.select_right_handle:
                         positions.append(point.handle_right)
-            for point in spline.points:
-                if point.select:
-                    positions.append(point.co)
             positions.extend(point.co.to_3d() for point in spline.points if point.select)
     elif context_mode == 'EDIT_METABALL':
         active_elem = active_object.data.elements.active
