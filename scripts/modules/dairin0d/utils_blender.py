@@ -19,6 +19,7 @@ import bpy
 
 import bmesh
 
+import math
 import time
 import os
 import re
@@ -195,6 +196,97 @@ def apply_modifiers(context, objects, idnames, options=(), apply_as='DATA'):
     layer_objs.active = active_obj
     
     return objects_to_delete
+
+# =========================================================================== #
+
+class Raycaster:
+    Result = collections.namedtuple("RaycastResult", ["success", "location", "normal", "index", "object", "collider", "matrix"])
+    
+    def __init__(self, objs=None, depsgraph=None, exclude=None, matrix=None):
+        self.matrix = matrix
+        self.colliders = []
+        self.add_colliders(objs, depsgraph, exclude)
+    
+    def __set_matrix(self, matrix, inv):
+        if matrix:
+            matrix = Matrix(matrix)
+            matrix_inv = matrix.inverted_safe()
+            if inv:
+                self.__matrix, self.__matrix_inv = matrix_inv, matrix
+            else:
+                self.__matrix, self.__matrix_inv = matrix, matrix_inv
+        else:
+            self.__matrix = None
+            self.__matrix_inv = None
+    
+    @property
+    def matrix(self):
+        return self.__matrix
+    @matrix.setter
+    def matrix(self, value):
+        self.__set_matrix(value, False)
+    
+    @property
+    def matrix_inv(self):
+        return self.__matrix_inv
+    @matrix_inv.setter
+    def matrix_inv(self, value):
+        self.__set_matrix(value, True)
+    
+    def add_colliders(self, objs=None, depsgraph=None, exclude=None):
+        if (not objs) and (objs is not None): return
+        if exclude is None: exclude = ()
+        for obj, obj_eval, matrix in BlUtil.Depsgraph.evaluated_objects(objs, depsgraph=depsgraph):
+            if obj in exclude: continue
+            self.add_collider(obj, obj_eval, matrix)
+    
+    def add_collider(self, obj, obj_eval=None, matrix=None, depsgraph=None):
+        if not obj_eval:
+            if depsgraph is None: depsgraph = bpy.context.evaluated_depsgraph_get()
+            obj_eval = obj.evaluated_get(depsgraph)
+        
+        if obj_eval.type != 'MESH': return
+        
+        if matrix is None: matrix = obj_eval.matrix_world
+        
+        matrix = matrix.copy() # make sure to copy
+        matrix_inv = matrix.inverted_safe()
+        matrix_inv_3x3 = matrix_inv.to_3x3()
+        self.colliders.append((obj, obj_eval, matrix, matrix_inv, matrix_inv_3x3))
+    
+    def __call__(self, ray_start, ray_end):
+        if self.matrix:
+            ray_start = self.matrix @ ray_start
+            ray_end = self.matrix @ ray_end
+        ray_dir = ray_end - ray_start
+        
+        best_z = math.inf
+        best_result = None
+        
+        for obj, collider, matrix, matrix_inv, matrix_inv_3x3 in self.colliders:
+            origin, direction = (matrix_inv @ ray_start), (matrix_inv_3x3 @ ray_dir)
+            result = collider.ray_cast(origin, direction, distance=direction.magnitude)
+            if not result[0]: continue
+            
+            z_dist = ray_dir.dot(matrix @ result[1])
+            if z_dist < best_z:
+                best_result = (*result, obj, collider, matrix)
+                best_z = z_dist
+        
+        if best_result:
+            success, location, normal, index, obj, collider, matrix = best_result
+            
+            location, normal = transform_point_normal(matrix, location, normal)
+            
+            if ray_dir.dot(normal) > 0: normal = -normal # e.g. for objects with negative scale
+            
+            if self.matrix_inv:
+                matrix = self.matrix_inv @ matrix
+                location, normal = transform_point_normal(self.matrix_inv, location, normal)
+            
+            return self.Result(success, location, normal, index, obj, collider, matrix)
+        
+        return self.Result(False, Vector(), Vector(), -1, None, None, Matrix())
 
 # =========================================================================== #
 
