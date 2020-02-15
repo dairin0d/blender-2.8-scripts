@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 2, 1),
+    "version": (1, 2, 2),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -461,6 +461,7 @@ class MouselookNavigation:
                             if flips.orbit_y:
                                 mouse_delta.y *= -1
                             self.change_rot_mouse(mouse_delta, mouse, speed_rot, trackball_mode)
+                        self.sync_view_orientation(False)
                     elif mode == 'PAN':
                         self.change_pos_mouse(mouse_delta, False)
                 
@@ -520,6 +521,8 @@ class MouselookNavigation:
                         
                         if is_orbit_snap:
                             self.snap_rotation(self.rotation_snap_subdivs)
+                        elif self.sv.is_perspective:
+                            self.sync_view_orientation(False)
                     elif mode == 'PAN':
                         self.change_pos_mouse(mouse_delta, False)
                     elif mode == 'DOLLY':
@@ -765,6 +768,14 @@ class MouselookNavigation:
     def detect_numpad_orientation(self, q):
         for name, nq in self.numpad_orientations:
             if abs(q.rotation_difference(nq).angle) < 1e-6: return name
+    
+    def sync_view_orientation(self, snap):
+        numpad_orientation = self.detect_numpad_orientation(self.sv.rotation)
+        if numpad_orientation and snap:
+            bpy.ops.view3d.view_axis(type=numpad_orientation, align_active=False)
+        else:
+            bpy.ops.view3d.view_orbit(angle=0.0, type='ORBITUP')
+    
     def snap_rotation(self, n=1):
         grid = math.pi*0.5 / n
         euler = self.euler.copy()
@@ -773,11 +784,7 @@ class MouselookNavigation:
         euler.z = round(euler.z / grid) * grid
         self.sv.turntable_euler = euler
         self.rot = self.sv.rotation
-        numpad_orientation = self.detect_numpad_orientation(self.rot)
-        if numpad_orientation:
-            bpy.ops.view3d.view_axis(type=numpad_orientation, align_active=False)
-        else:
-            bpy.ops.view3d.view_orbit(angle=0.0, type='ORBITUP')
+        self.sync_view_orientation(True)
     
     def change_euler(self, ex, ey, ez, always_up=False):
         self.euler.x += ex
