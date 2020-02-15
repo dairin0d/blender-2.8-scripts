@@ -967,6 +967,9 @@ class prop:
             itype = type(value[0])
             if itype in self.types_primitive_vector:
                 bpy_type = self.types_primitive_vector[itype]
+                if kwargs.get("subtype") == 'COLOR': # need to set min-max to 0..1, otherwise glitches
+                    kwargs.setdefault("min", 0.0)
+                    kwargs.setdefault("max", 1.0)
                 kwargs["size"] = len(value)
             else:
                 raise TypeError(err_msg)
