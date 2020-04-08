@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 2, 2),
+    "version": (1, 2, 3),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -158,7 +158,11 @@ class MouselookNavigation_InputSettings:
     
     independent_modes: False | prop("Independent modes", "When switching to a different mode, use the mode's last position/rotation/zoom")
     
-    zbrush_mode: False | prop("ZBrush mode", "The operator would be invoked only if mouse is over empty space or close to region border")
+    zbrush_mode: 'NONE' | prop("ZBrush mode", "Invoke the operator only when mouse is over empty space or near the region border", items=[
+        ('NONE', "ZBrush mode: Off", "Don't use ZBrush behavior"),
+        ('SIMPLE', "ZBrush mode: Simple", "Use ZBrush behavior only when no modifier keys are pressed"),
+        ('ALWAYS', "ZBrush mode: Always", "Always use ZBrush behavior"),
+    ])
     
     def _keyprop(name, default_keys):
         return default_keys | prop(name, name)
@@ -200,7 +204,7 @@ class MouselookNavigation_InputSettings:
                         layout.prop(self, "default_mode")
                         layout.prop(self, "ortho_unrotate", toggle=True)
                         layout.prop(self, "independent_modes", toggle=True)
-                        layout.prop(self, "zbrush_mode", toggle=True)
+                        layout.prop(self, "zbrush_mode", text="")
                         #layout.label() # just an empty line
                         layout.prop(self, "keys_rotmode_switch")
                         layout.prop(self, "keys_origin_mouse")
@@ -934,17 +938,23 @@ class MouselookNavigation:
         mode_keys = {'ORBIT':self.keys_orbit, 'PAN':self.keys_pan, 'DOLLY':self.keys_dolly, 'ZOOM':self.keys_zoom, 'FLY':self.keys_fly, 'FPS':self.keys_fps}
         self.mode_stack = ModeStack(mode_keys, self.allowed_transitions, self.default_mode, 'NONE')
         self.mode_stack.update()
-        if self.mode_stack.mode == 'NONE':
-            if self.zbrush_mode:
+        
+        if (self.mode_stack.mode == 'NONE') or (self.zbrush_mode == 'ALWAYS'):
+            if self.zbrush_mode != 'NONE':
                 mouse_region_11 = clickable_region_size - mouse_clickable_region
                 wrk_x = min(mouse_clickable_region.x, mouse_region_11.x)
                 wrk_y = min(mouse_clickable_region.y, mouse_region_11.y)
                 wrk_pos = min(wrk_x, wrk_y)
+                
                 if wrk_pos > self.zbrush_border:
                     if addon_prefs.zbrush_method == 'SELECTION':
                         cast_result = self.sv.select(mouse_region)
+                    
                     if cast_result.success: return {'PASS_THROUGH'}
-            self.mode_stack.mode = self.default_mode
+            
+            if self.mode_stack.mode == 'NONE':
+                self.mode_stack.mode = self.default_mode
+        
         self.update_cursor_icon(context)
         
         self.color_crosshair_visible = addon_prefs.get_color("color_crosshair_visible")
@@ -1302,8 +1312,31 @@ class AutoregKeymapPreset:
             keymaps = [BlRna.serialize(ark) for ark in addon_prefs.autoreg_keymaps]
             
             data = dict(flips=flips, universal=universal, settings=settings, keymaps=keymaps)
+        else:
+            self._fix_old_versions(data)
         
         self.data = data
+    
+    def _fix_old_versions(self, data):
+        if not isinstance(data, dict): return
+        
+        def fix_zbrush_mode(d):
+            if not isinstance(d, dict): return
+            zbrush_mode = d.get("zbrush_mode")
+            if not isinstance(zbrush_mode, str):
+                d["zbrush_mode"] = ('SIMPLE' if zbrush_mode else 'NONE')
+        
+        settings = data.get("settings")
+        if settings:
+            fix_zbrush_mode(settings)
+        
+        keymaps = data.get("keymaps")
+        if keymaps and isinstance(keymaps, (list, tuple)):
+            for keymap in keymaps:
+                if not isinstance(keymap, dict): continue
+                input_settings = keymap.get("input_settings")
+                if input_settings:
+                    fix_zbrush_mode(input_settings)
     
     def apply(self, context):
         wm = context.window_manager
@@ -1466,8 +1499,8 @@ class ThisAddonPreferences:
     
     def calc_zbrush_mode(self):
         if self.use_universal_input_settings:
-            return self.universal_input_settings.zbrush_mode
-        return any(ark.input_settings.zbrush_mode for ark in self.autoreg_keymaps)
+            return (self.universal_input_settings.zbrush_mode != 'NONE')
+        return any((ark.input_settings.zbrush_mode != 'NONE') for ark in self.autoreg_keymaps)
     zbrush_mode: False | prop(get=calc_zbrush_mode)
     
     use_default_keymap: True | prop("Use default keymap", options={'HIDDEN'})

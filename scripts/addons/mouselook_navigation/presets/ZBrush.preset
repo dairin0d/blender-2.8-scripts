@@ -43,7 +43,7 @@
                     "keys_zoom": "!Alt",
                     "name": "",
                     "ortho_unrotate": true,
-                    "zbrush_mode": true
+                    "zbrush_mode": "SIMPLE"
                 },
                 "insert_after": "view3d.manipulator",
                 "insert_before": "*",
@@ -100,7 +100,7 @@
                     "keys_zoom": "!Alt",
                     "name": "",
                     "ortho_unrotate": true,
-                    "zbrush_mode": true
+                    "zbrush_mode": "SIMPLE"
                 },
                 "insert_after": "view3d.manipulator",
                 "insert_before": "*",
@@ -166,7 +166,7 @@
             "keys_zoom": "Ctrl",
             "name": "",
             "ortho_unrotate": true,
-            "zbrush_mode": false
+            "zbrush_mode": "NONE"
         },
         "universal": false
     }
