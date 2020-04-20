@@ -1217,6 +1217,63 @@ class AddonManager:
                     layout.operator(preset_cls.op_selector, text=text, icon=icon)
                 preset_cls.draw_popup = draw_popup
             
+            # Import / Export preset(s) #
+            # ========================= #
+            preset_cls.op_import = f"{op_prefix}_import"
+            @self.Operator(idname=preset_cls.op_import, label="Import preset(s)", description="Import preset(s)", options={'INTERNAL'})
+            class OpPresetImport:
+                files: [bpy.types.OperatorFileListElement] | prop("File Path", "File path used for importing")
+                directory: "" | prop()
+                def invoke(self, context, event):
+                    context.window_manager.fileselect_add(self)
+                    return {'RUNNING_MODAL'}
+                def execute(self, context):
+                    paths = [os.path.join(self.directory, item.name) for item in self.files]
+                    for path in paths:
+                        if not os.path.isfile(path): continue
+                        if preset_manager.multifile:
+                            name = BpyPath.splitext(os.path.basename(path))[0]
+                            for preset in preset_manager.read(path, name):
+                                preset_manager.add(preset)
+                        else:
+                            for preset in preset_manager.read(path):
+                                preset_manager.add(preset)
+                    return {'FINISHED'}
+            
+            preset_cls.op_export = f"{op_prefix}_export"
+            @self.Operator(idname=preset_cls.op_export, label="Export preset", description="Export preset", options={'INTERNAL'})
+            class OpPresetExport:
+                id: "" | prop(options={'HIDDEN'})
+                filepath: "" | prop("File Path", "File path used for exporting", maxlen=1024, subtype='FILE_PATH')
+                check_existing: True | prop("Check Existing", "Check and warn on overwriting existing files", options={'HIDDEN'})
+                def invoke(self, context, event):
+                    if not self.filepath:
+                        blend_filepath = os.path.dirname(context.blend_data.filepath)
+                        self.filepath = os.path.join(blend_filepath, self.id)
+                    context.window_manager.fileselect_add(self)
+                    return {'RUNNING_MODAL'}
+                def execute(self, context):
+                    if self.id:
+                        preset = preset_manager.get(self.id)
+                    else:
+                        name = BpyPath.splitext(os.path.basename(self.filepath))[0]
+                        preset = preset_cls(name, context=context)
+                    preset_manager.write(self.filepath, preset)
+                    self.filepath = "" # reset
+                    return {'FINISHED'}
+            
+            @self.context_menu('APPEND')
+            def context_menu_draw(self, context):
+                btn_op = getattr(context, "button_operator", None)
+                if btn_op is None: return
+                layout = self.layout
+                op_idname = BpyOp.convert(btn_op.rna_type.identifier, py=True)
+                if op_idname.startswith(op_prefix):
+                    layout.separator()
+                    op = layout.operator(preset_cls.op_import)
+                    op = layout.operator(preset_cls.op_export)
+                    op.id = getattr(btn_op, "id", "")
+            
             return preset_cls
         
         return decorator
@@ -1323,7 +1380,7 @@ class PresetManager:
             except KeyError:
                 return node
     
-    def __load(self, path, name=None):
+    def read(self, path, name=None):
         try:
             with open(path, "r") as f:
                 txt = f.read()
@@ -1390,7 +1447,7 @@ class PresetManager:
             for filepath, name, ext in self.__iter_preset_files(path):
                 if name in self.__hashed: continue # not supposed to happen
                 sortkey = (os.path.getmtime(filepath) if self.__sorting == 'MODIFY' else name)
-                for preset in self.__load(filepath, name):
+                for preset in self.read(filepath, name):
                     items.append((sortkey, preset))
                     self.__hashed[preset.id] = preset
                     break
@@ -1398,7 +1455,7 @@ class PresetManager:
             items.sort(key=(lambda item: item[0]))
             self.__ordered.extend(item[1] for item in items)
         else:
-            for preset in self.__load(path):
+            for preset in self.read(path):
                 if preset.id in self.__hashed: continue
                 self.__ordered.append(preset)
                 self.__hashed[preset.id] = preset
@@ -1480,7 +1537,7 @@ class PresetManager:
             if ext.lower() != self.__ext: continue
             yield filepath, name, ext
     
-    def __save(self, path, *presets):
+    def write(self, path, *presets):
         def default(value):
             if isinstance(value, set): return list(value)
             raise TypeError(f"{value} is not JSON serializable")
@@ -1525,10 +1582,12 @@ class PresetManager:
         if not os.path.exists(self.__presets_dir): os.makedirs(self.__presets_dir)
         path = self.__presets_file
         
+        reseted = os.path.exists(self.__mark_file)
+        
         os_remove_all(self.__mark_file)
         
         if self.__multifile:
-            if id is None:
+            if (id is None) or reseted:
                 ids = set(self.__hashed.keys())
                 for filepath, name, ext in self.__iter_preset_files(self.__presets_dir):
                     ids.add(name)
@@ -1537,9 +1596,9 @@ class PresetManager:
             
             for id in ids:
                 preset = self.__hashed.get(id) # if absent, delete the file
-                self.__save(path.replace("{id}", id), preset)
+                self.write(path.replace("{id}", id), preset)
         else:
-            self.__save(path, *self.__ordered)
+            self.write(path, *self.__ordered)
         
         return True
     
@@ -1554,7 +1613,7 @@ class PresetManager:
         else:
             os_remove_all(path)
         
-        self.__save(self.__mark_file)
+        self.write(self.__mark_file)
         time.sleep(0.05)
         
         self.load()
