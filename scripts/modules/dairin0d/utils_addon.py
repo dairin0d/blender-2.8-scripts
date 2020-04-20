@@ -123,11 +123,6 @@ class AddonManager:
         
         self._Runtime = type(name_runtime, (AttributeHolder,), {})
         self._runtime = self._Runtime()
-        
-        # https://docs.blender.org/api/blender2.8/bpy.types.Menu.html#extending-the-button-context-menu
-        # This class has to be exactly named like that to insert an entry in the right click menu
-        self._ContextMenu = type("WM_MT_button_context", (bpy.types.Menu,), dict(bl_label="-", draw=(lambda self, context: None)))
-        self.__add_class(self._ContextMenu)
     
     # If this is a textblock, its module will be topmost
     # and will have __name__ == "__main__".
@@ -309,9 +304,19 @@ class AddonManager:
         self._on_unregister.append(callback)
         return callback
     
-    ContextMenu = property(lambda self: self._ContextMenu)
+    @property
+    def ContextMenu(self):
+        ContextMenu = getattr(bpy.types, "WM_MT_button_context", None)
+        if not ContextMenu:
+            # https://docs.blender.org/api/blender2.8/bpy.types.Menu.html#extending-the-button-context-menu
+            # This class has to be exactly named like that to insert an entry in the right click menu
+            # ATTENTION: there can be only one such registered class, so it HAS to be shared between addons
+            ContextMenu = type("WM_MT_button_context", (bpy.types.Menu,), dict(bl_label="-", draw=(lambda self, context: None)))
+            bpy.utils.register_class(ContextMenu)
+        return ContextMenu
+    
     def context_menu(self, order, owner=None):
-        return self.ui_draw(self._ContextMenu, order, owner)
+        return self.ui_draw(self.ContextMenu, order, owner)
     
     def ui_draw(self, ui, order, owner=None):
         def decorator(draw_func):
