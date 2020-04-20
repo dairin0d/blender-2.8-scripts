@@ -449,19 +449,19 @@ class BlUI:
         scene = screen.scene
         tool_settings = scene.tool_settings
         for area in screen.areas:
-            if point_in_rect(point, area):
+            if BlUI.point_in_rect(point, area):
                 space_data = area.spaces.active
                 for region in area.regions:
-                    if point_in_rect(point, region):
+                    if BlUI.point_in_rect(point, region):
                         yield dict(window=window, screen=screen,
                             area=area, space_data=space_data, region=region,
-                            region_data=rv3d_from_region(area, region),
+                            region_data=BlUI.rv3d_from_region(area, region),
                             scene=scene, tool_settings=tool_settings)
                 break
     
     def ui_context_under_coord(x, y, index=0, window=None):
         ui_context = None
-        for i, ui_context in enumerate(ui_contexts_under_coord(x, y, window)):
+        for i, ui_context in enumerate(BlUI.ui_contexts_under_coord(x, y, window)):
             if i == index: return ui_context
         return ui_context
     
@@ -478,7 +478,7 @@ class BlUI:
                     if _region.type == region_type: region = _region
                 return dict(window=window, screen=screen,
                     area=area, space_data=space_data, region=region,
-                    region_data=rv3d_from_region(area, region),
+                    region_data=BlUI.rv3d_from_region(area, region),
                     scene=scene, tool_settings=tool_settings)
     
     def ui_hierarchy(ui_obj):
