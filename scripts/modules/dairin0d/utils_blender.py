@@ -254,7 +254,37 @@ class Raycaster:
         matrix_inv_3x3 = matrix_inv.to_3x3()
         self.colliders.append((obj, obj_eval, matrix, matrix_inv, matrix_inv_3x3))
     
-    def __call__(self, ray_start, ray_end):
+    def closest_point(self, origin, distance=1.84467e+19):
+        if self.matrix:
+            origin = self.matrix @ origin
+        
+        best_dist = math.inf
+        best_result = None
+        
+        for obj, collider, matrix, matrix_inv, matrix_inv_3x3 in self.colliders:
+            origin_local = (matrix_inv @ origin)
+            result = collider.closest_point_on_mesh(origin_local, distance=distance)
+            if not result[0]: continue
+            
+            dist = (origin - (matrix @ result[1])).magnitude
+            if dist < best_dist:
+                best_result = (*result, obj, collider, matrix)
+                best_dist = dist
+        
+        if best_result:
+            success, location, normal, index, obj, collider, matrix = best_result
+            
+            location, normal = transform_point_normal(matrix, location, normal)
+            
+            if self.matrix_inv:
+                matrix = self.matrix_inv @ matrix
+                location, normal = transform_point_normal(self.matrix_inv, location, normal)
+            
+            return self.Result(success, location, normal, index, obj, collider, matrix)
+        
+        return self.Result(False, Vector(), Vector(), -1, None, None, Matrix())
+    
+    def ray_cast(self, ray_start, ray_end):
         if self.matrix:
             ray_start = self.matrix @ ray_start
             ray_end = self.matrix @ ray_end
@@ -500,7 +530,7 @@ class BlUtil:
             return child_map, parent_map
         
         @staticmethod
-        def all_children(obj, result=None, child_map=None):
+        def all_children(obj, result=None, child_map=None, filter=None):
             if child_map is None: child_map = BlUtil.Object.map_children()[0]
             if result is None: result = []
             children = child_map.get(obj)
@@ -508,6 +538,7 @@ class BlUtil:
                 add = (result.append if isinstance(result, list) else result.add)
                 add_children = BlUtil.Object.all_children
                 for child in children:
+                    if filter and not filter(child): continue
                     add(child)
                     add_children(child, result, child_map)
             return result
@@ -547,7 +578,7 @@ class BlUtil:
                 # This trick was mentioned in "Physics - Broad phase and Narrow phase" chapter of
                 # Newcastle University » Game » Masters Degree » Game Technologies » Physics Tutorials
                 # https://research.ncl.ac.uk/game/mastersdegree/gametechnologies/physicstutorials/6accelerationstructures/Physics%20-%20Spatial%20Acceleration%20Structures.pdf
-                # Basically, take and abs() of all matrix values and transform local bbox half-size by it
+                # Basically, take an abs() of all matrix values and transform local bbox half-size by it
                 matrix_abs = Matrix([[abs(v) for v in row] for row in matrix.to_3x3()])
                 half = (bmax - bmin) * 0.5
                 center = bmin + half
@@ -1015,6 +1046,66 @@ class BlUtil:
                 
                 return x, y, z, t, None
     
+    class Material:
+        @staticmethod
+        def copy_nodes(src_mat, dst_mat, include=None, exclude=None):
+            # So far, Blender has no API to directly copy nodes between node trees,
+            # and BlRna serializing/deserializing can't fully copy some node data
+            src_use_nodes = src_mat.use_nodes
+            dst_use_nodes = dst_mat.use_nodes
+            
+            src_mat.use_nodes = True
+            dst_mat.use_nodes = True
+            
+            context = bpy.context
+            scene = context.scene
+            view_layer = context.view_layer
+            
+            mesh = bpy.data.meshes.new("CopyNodes")
+            mesh.materials.append(src_mat)
+            mesh.materials.append(dst_mat)
+            obj = bpy.data.objects.new("CopyNodes", mesh)
+            scene.collection.objects.link(obj)
+            obj.select_set(True)
+            
+            active_obj = view_layer.objects.active
+            view_layer.objects.active = obj
+            
+            area = context.area
+            area_type = area.type
+            area.type = 'NODE_EDITOR'
+            space = context.space_data
+            
+            if include:
+                node_filter = (include if callable(include) else (lambda node: node in include))
+            elif exclude:
+                node_filter = ((lambda node: not exclude(node)) if callable(exclude) else (lambda node: node not in exclude))
+            else:
+                node_filter = (lambda node: True)
+            
+            # It seems that assigning obj.active_material_index AND space.node_tree is necessary
+            obj.active_material_index = 0
+            space.node_tree = src_mat.node_tree
+            node_select_info = [(node, node.select) for node in src_mat.node_tree.nodes]
+            for node in src_mat.node_tree.nodes:
+                node.select = node_filter(node)
+            bpy.ops.node.clipboard_copy()
+            for node, select in node_select_info:
+                node.select = select
+            
+            obj.active_material_index = 1
+            space.node_tree = dst_mat.node_tree
+            bpy.ops.node.clipboard_paste()
+            
+            area.type = area_type
+            view_layer.objects.active = active_obj
+            
+            bpy.data.objects.remove(obj)
+            bpy.data.meshes.remove(mesh)
+            
+            src_mat.use_nodes = src_use_nodes
+            dst_mat.use_nodes = dst_use_nodes
+    
     class Image:
         # path_mode: 'DONT_CHANGE', 'ABSOLUTE', 'RELATIVE'
         # reuse: 'NONE', 'REUSE', 'RELOAD'
@@ -1368,6 +1459,8 @@ class MeshEquivalent:
         bm = bmesh.new()
         kwargs.update(bm=bm, materials={}, target=mesh)
         cls.gather(objs, depsgraph, **kwargs)
+        if kwargs.get("triangulate"):
+            bmesh.ops.triangulate(bm, faces=bm.faces)
         if not mesh: mesh = bpy.data.meshes.new(name)
         bm.to_mesh(mesh) # erases all previous geometry
         bm.free()
