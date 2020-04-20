@@ -275,7 +275,7 @@ class BlRna:
                     value = {
                         rna_prop.identifier:BlRna.serialize_value(getattr(value, rna_prop.identifier),
                             recursive=recursive, structs=structs, is_struct=rna_prop.is_never_none)
-                        for name, rna_prop in BlRna(value).properties if name not in rna_names
+                        for name, rna_prop in BlRna(value).properties.items() if name not in rna_names
                     }
             elif value_class is bpy.types.EnumPropertyItem:
                 value = (value.identifier, value.name, value.description, value.icon, value.value)
