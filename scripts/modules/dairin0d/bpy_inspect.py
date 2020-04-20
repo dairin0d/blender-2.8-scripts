@@ -257,26 +257,25 @@ class BlRna:
                     setattr(obj, name, BlRna.get_default(rna_prop))
     
     @staticmethod
-    def serialize_value(value, recursive=True, json=False):
+    def serialize_value(value, recursive=True, json=False, structs=False, is_struct=False):
         """Serialize rna property value"""
-        value_class = value.__class__
-        base_class = value_class.__base__
-        class_name = value_class.__name__
-        if base_class is bpy.types.ID:
+        if isinstance(value, bpy.types.ID):
             # We have to store ID block type along with its name,
             # since some properties don't reference specific
             # ID types (e.g. Object.data's type is ID)
-            if value:
-                value = (type(value).__name__, value.name_full)
-            else:
-                value = None
+            value = (type(value).__name__, value.name_full)
         else:
-            if base_class is bpy.types.PropertyGroup:
+            value_class = value.__class__
+            base_class = value_class.__base__
+            class_name = value_class.__name__
+            
+            if (base_class is bpy.types.PropertyGroup) or (structs and is_struct):
                 if recursive:
                     rna_names = ("bl_rna", "rna_type")
                     value = {
-                        rna_prop.identifier:BlRna.serialize_value(getattr(value, rna_prop.identifier), recursive)
-                        for name, rna_prop in BlRna.properties(value)
+                        rna_prop.identifier:BlRna.serialize_value(getattr(value, rna_prop.identifier),
+                            recursive=recursive, structs=structs, is_struct=rna_prop.is_never_none)
+                        for name, rna_prop in BlRna(value).properties if name not in rna_names
                     }
             elif value_class is bpy.types.EnumPropertyItem:
                 value = (value.identifier, value.name, value.description, value.icon, value.value)
@@ -286,36 +285,53 @@ class BlRna:
                 value = [BlRna.serialize_value(item, recursive) for item in value]
             elif class_name == "bpy_prop_collection_idprop":
                 value = [BlRna.serialize_value(item, recursive) for item in value]
+        
         if json:
             if isinstance(value, set):
                 value = list(value) # json.dumps() does not accept sets
+        
         return value
     
     @staticmethod
-    def serialize(obj, ignore_default=False, json=False):
+    def serialize(obj, ignore_default=False, json=False, structs=False):
         """Serialize object's rna properties"""
         if not obj: return None
         data = {}
         for name, rna_prop in BlRna.properties(obj):
             if ignore_default and (not obj.is_property_set(rna_prop.identifier)): continue
             value = getattr(obj, rna_prop.identifier)
-            data[rna_prop.identifier] = BlRna.serialize_value(value, json=json)
+            data[rna_prop.identifier] = BlRna.serialize_value(value, json=json,
+                structs=structs, is_struct=rna_prop.is_never_none)
         return data
     
     @staticmethod
     def deserialize(obj, data, ignore_default=False, suppress_errors=False):
         """Deserialize object's rna properties"""
         if (not obj) or (not data): return
+        
+        if not isinstance(data, dict): data = BlRna.serialize(data)
+        
         rna_props = BlRna(obj).properties
         for name, value in data.items():
             rna_prop = rna_props.get(name)
             if rna_prop is None: continue
+            
             type_id = rna_prop.bl_rna.identifier
+            
             if type_id == "PointerProperty":
-                if isinstance(rna_prop.fixed_type, bpy.types.ID):
+                if isinstance(value, bpy_struct) and not (rna_prop.is_readonly or rna_prop.is_never_none):
+                    try:
+                        setattr(obj, name, value)
+                    except:
+                        # sometimes Blender's rna is incomplete/incorrect
+                        if not suppress_errors: raise
+                elif isinstance(rna_prop.fixed_type, bpy.types.ID):
+                    if rna_prop.is_readonly: continue
+                    
                     if value is not None:
                         bpy_data = BpyData.to_data(value[0])
                         value = bpy_data.get(value[1])
+                    
                     try:
                         setattr(obj, name, value)
                     except:
@@ -325,23 +341,27 @@ class BlRna:
                     BlRna.deserialize(getattr(obj, name), value, ignore_default, suppress_errors)
             elif type_id == "CollectionProperty":
                 collection = getattr(obj, name)
+                # collection.add() generally only works for bpy.props.CollectionProperty
+                if collection.__class__.__name__ != "bpy_prop_collection_idprop": continue
+                
                 collection.clear()
                 if isinstance(rna_prop.fixed_type, bpy.types.ID):
                     # Blender does not yet support defining ID collection properties; this is just in case
                     for item in value:
-                        if item is None:
-                            collection.add()
-                        else:
+                        collection.add()
+                        if item is not None:
                             bpy_data = BpyData.to_data(item[0])
-                            collection.add()
                             collection[-1] = bpy_data.get(item[1])
                 else:
                     for item in value:
                         BlRna.deserialize(collection.add(), item, ignore_default, suppress_errors)
             else:
+                if rna_prop.is_readonly: continue
+                
                 if (not ignore_default) or (not BlRna.is_default(value, rna_prop)):
                     if (type_id == "EnumProperty") and rna_prop.is_enum_flag and (not isinstance(value, set)):
                         value = set(value) # might be other collection type when loaded from JSON
+                    
                     try:
                         setattr(obj, name, value)
                     except:
@@ -979,7 +999,8 @@ class prop:
             item = value[0]
             itype = type(item)
             if isinstance(item, dict): # a = [dict(prop1=..., prop2=..., ...)] | prop()
-                value = type(kwargs.get("name", "<Auto PropertyGroup>"), (bpy.types.PropertyGroup,), item)
+                value = type(kwargs.get("name", "<Auto PropertyGroup>"),
+                    (bpy.types.PropertyGroup,), {"__annotations__":item})
                 value.__name__ += ":AUTOREGISTER" # for AddonManager
             elif itype in self.types_item_instance: # a = [Matrix()] | prop()
                 value = self.types_item_instance[itype]
@@ -997,7 +1018,8 @@ class prop:
             if "items" not in kwargs: # a = dict(prop1=..., prop2=..., ...) | prop()
                 bpy_type = bpy.props.PointerProperty
                 value_target = "type"
-                value = type(kwargs.get("name", "<Auto PropertyGroup>"), (bpy.types.PropertyGroup,), value)
+                value = type(kwargs.get("name", "<Auto PropertyGroup>"),
+                    (bpy.types.PropertyGroup,), {"__annotations__":value})
                 value.__name__ += ":AUTOREGISTER" # for AddonManager
             elif not value: # a = {} | prop(items=['A', 'B', 'C'])
                 bpy_type = bpy.props.EnumProperty
