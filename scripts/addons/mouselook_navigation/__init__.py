@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 2, 4),
+    "version": (1, 2, 5),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -1309,13 +1309,18 @@ class AutoregKeymapPreset:
             universal = addon_prefs.use_universal_input_settings
             settings = BlRna.serialize(addon_prefs.universal_input_settings)
             
-            keymaps = [BlRna.serialize(ark) for ark in addon_prefs.autoreg_keymaps]
+            keymaps = [self._cleanup_ark_data(BlRna.serialize(ark))
+                for ark in addon_prefs.autoreg_keymaps]
             
             data = dict(flips=flips, universal=universal, settings=settings, keymaps=keymaps)
         else:
             self._fix_old_versions(data)
         
         self.data = data
+    
+    def _cleanup_ark_data(self, ark_data):
+        ark_data.pop("is_current")
+        ark_data.pop("index")
     
     def _fix_old_versions(self, data):
         if not isinstance(data, dict): return
@@ -1334,6 +1339,7 @@ class AutoregKeymapPreset:
         if keymaps and isinstance(keymaps, (list, tuple)):
             for keymap in keymaps:
                 if not isinstance(keymap, dict): continue
+                self._cleanup_ark_data(keymap)
                 input_settings = keymap.get("input_settings")
                 if input_settings:
                     fix_zbrush_mode(input_settings)
