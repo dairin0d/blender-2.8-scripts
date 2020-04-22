@@ -1319,8 +1319,8 @@ class AutoregKeymapPreset:
         self.data = data
     
     def _cleanup_ark_data(self, ark_data):
-        ark_data.pop("is_current")
-        ark_data.pop("index")
+        ark_data.pop("is_current", None)
+        ark_data.pop("index", None)
     
     def _fix_old_versions(self, data):
         if not isinstance(data, dict): return
