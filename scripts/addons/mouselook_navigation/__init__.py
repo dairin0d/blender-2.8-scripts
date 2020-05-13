@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 2, 5),
+    "version": (1, 2, 6),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -1321,6 +1321,7 @@ class AutoregKeymapPreset:
     def _cleanup_ark_data(self, ark_data):
         ark_data.pop("is_current", None)
         ark_data.pop("index", None)
+        return ark_data
     
     def _fix_old_versions(self, data):
         if not isinstance(data, dict): return
