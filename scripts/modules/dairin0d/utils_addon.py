@@ -134,6 +134,16 @@ class AddonManager:
         module_locals = None
         module_name = None
         
+        def fix_doc_url(info):
+            has_doc = "doc_url" in info
+            has_wiki = "wiki_url" in info
+            if bpy.app.version >= (2, 83, 0):
+                if has_wiki and not has_doc:
+                    info["doc_url"] = info.pop("wiki_url")
+            else:
+                if has_doc and not has_wiki:
+                    info["wiki_url"] = info.pop("doc_url")
+        
         for frame_record in reversed(inspect.stack()):
             # Frame record is a tuple of 6 elements:
             # (frame_obj, filename, line_id, func_name, context_lines, context_line_id)
@@ -148,6 +158,7 @@ class AddonManager:
             
             info = frame.f_globals.get("bl_info")
             if info:
+                fix_doc_url(info)
                 module_globals = frame.f_globals
                 module_locals = frame.f_locals
                 module_name = module_globals.get("__name__", "").split(".")[0]
@@ -1491,43 +1502,42 @@ class PresetManager:
             return tuple(try_parse(part) for part in s.split("."))
         
         usr_path_curr = bpy.utils.resource_path('USER')
-        curr_version = parse_version(os.path.basename(usr_path_curr))
         usr_path_root = os.path.dirname(usr_path_curr)
-        versions = []
-        for fsname in os.listdir(usr_path_root):
-            fspath = BpyPath.join(usr_path_root, fsname)
-            if not os.path.isdir(fspath): continue
-            versions.append((parse_version(fsname), fspath))
-        versions.sort()
-        versions, paths = [v for v, p in versions], [p for v, p in versions]
         
-        i = binary_search(versions, curr_version, insert=-1)
-        for path in reversed(paths[:i]):
-            if self.__multifile:
-                mark_file = BpyPath.join(path, self.__mark_subfile)
-                if os.path.exists(mark_file) and os.path.exists(BpyPath.dirname(self.__mark_file)):
-                    shutil.copy2(mark_file, self.__mark_file)
-                    return self.__builtin_dir
-                
-                presets_dir = BpyPath.join(path, self.__presets_subdir)
-                if os.path.isdir(presets_dir) and os.path.exists(BpyPath.dirname(self.__presets_dir)):
-                    shutil.copytree(presets_dir, self.__presets_dir)
-                    return presets_dir
-            else:
-                mark_file = BpyPath.join(path, self.__mark_subfile)
-                if os.path.exists(mark_file) and os.path.exists(BpyPath.dirname(self.__mark_file)):
-                    shutil.copy2(mark_file, self.__mark_file)
-                    return self.__builtin_file
-                
-                presets_file = BpyPath.join(path, self.__presets_subfile)
-                if os.path.isfile(presets_file) and os.path.exists(BpyPath.dirname(self.__presets_file)):
-                    shutil.copy2(presets_file, self.__presets_file)
-                    return presets_file
+        if os.path.isdir(usr_path_root):
+            versions = []
+            for fsname in os.listdir(usr_path_root):
+                fspath = BpyPath.join(usr_path_root, fsname)
+                if not os.path.isdir(fspath): continue
+                versions.append((parse_version(fsname), fspath))
+            versions.sort()
+            versions, paths = [v for v, p in versions], [p for v, p in versions]
+            
+            curr_version = parse_version(os.path.basename(usr_path_curr))
+            i = binary_search(versions, curr_version, insert=-1)
+            for path in reversed(paths[:i]):
+                if self.__multifile:
+                    mark_file = BpyPath.join(path, self.__mark_subfile)
+                    if os.path.exists(mark_file) and os.path.exists(BpyPath.dirname(self.__mark_file)):
+                        shutil.copy2(mark_file, self.__mark_file)
+                        return self.__builtin_dir
+                    
+                    presets_dir = BpyPath.join(path, self.__presets_subdir)
+                    if os.path.isdir(presets_dir) and os.path.exists(BpyPath.dirname(self.__presets_dir)):
+                        shutil.copytree(presets_dir, self.__presets_dir)
+                        return presets_dir
+                else:
+                    mark_file = BpyPath.join(path, self.__mark_subfile)
+                    if os.path.exists(mark_file) and os.path.exists(BpyPath.dirname(self.__mark_file)):
+                        shutil.copy2(mark_file, self.__mark_file)
+                        return self.__builtin_file
+                    
+                    presets_file = BpyPath.join(path, self.__presets_subfile)
+                    if os.path.isfile(presets_file) and os.path.exists(BpyPath.dirname(self.__presets_file)):
+                        shutil.copy2(presets_file, self.__presets_file)
+                        return presets_file
         
-        if self.__multifile:
-            return self.__builtin_dir
-        else:
-            return self.__builtin_file
+        return (self.__builtin_dir if self.__multifile else self.__builtin_file)
     
     def __iter_preset_files(self, path):
         for filename in os.listdir(path):

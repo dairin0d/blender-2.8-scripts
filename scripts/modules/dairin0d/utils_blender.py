@@ -600,37 +600,37 @@ class BlUtil:
         # active/selection/hidden states can be different for each view layer
         
         @staticmethod
-        def select_get(obj, layer=None):
+        def select_get(obj, view_layer=None):
             try:
-                return obj.select_get(view_layer=layer)
+                return obj.select_get(view_layer=view_layer)
             except RuntimeError: # happens when obj is not in view layer
                 return False
         
         @staticmethod
-        def select_set(obj, value, layer=None):
+        def select_set(obj, value, view_layer=None):
             try:
-                obj.select_set(value, view_layer=layer)
+                obj.select_set(value, view_layer=view_layer)
             except RuntimeError: # happens when obj is not in view layer
                 pass
         
         @staticmethod
-        def visible_get(obj, layer=None, viewport=None):
+        def visible_get(obj, view_layer=None, viewport=None):
             try:
-                return obj.visible_get(view_layer=layer, viewport=viewport)
+                return obj.visible_get(view_layer=view_layer, viewport=viewport)
             except RuntimeError: # happens when obj is not in view layer
                 return not obj.hide_viewport
         
         @staticmethod
-        def hide_get(obj, layer=None):
+        def hide_get(obj, view_layer=None):
             try:
-                return obj.hide_get(view_layer=layer)
+                return obj.hide_get(view_layer=view_layer)
             except RuntimeError: # happens when obj is not in view layer
                 return obj.hide_viewport
         
         @staticmethod
-        def hide_set(obj, value, layer=None):
+        def hide_set(obj, value, view_layer=None):
             try:
-                obj.hide_set(value, view_layer=layer)
+                obj.hide_set(value, view_layer=view_layer)
             except RuntimeError: # happens when obj is not in view layer
                 obj.hide_viewport = value
         
@@ -657,6 +657,20 @@ class BlUtil:
                     value = (action == 'SELECT')
                     for obj in view_layer.objects:
                         obj.select_set(value, view_layer=view_layer)
+        
+        @staticmethod
+        def active_get(view_layer=None):
+            if not view_layer: view_layer = bpy.context.view_layer
+            return view_layer.objects.active
+        
+        @staticmethod
+        def active_set(obj, view_layer=None):
+            if not view_layer: view_layer = bpy.context.view_layer
+            
+            try:
+                view_layer.objects.active = obj
+            except RuntimeError: # happens when obj is not in view layer
+                view_layer.objects.active = None
     
     class Collection:
         @staticmethod
