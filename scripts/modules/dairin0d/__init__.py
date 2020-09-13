@@ -61,6 +61,28 @@ else:
                     else:
                         vars[sub_name] = getattr(module, sub_name)
     
+    def include(path):
+        import os
+        import inspect
+        import bpy
+        
+        frame = inspect.stack()[1].frame
+        
+        if not os.path.isabs(path):
+            module_path = frame.f_globals.get("__file__") or ""
+            module_name = frame.f_globals.get("__name__") or ""
+            
+            if module_name == "__main__":
+                module_path = bpy.path.abspath("//")
+            
+            if module_path:
+                module_path = os.path.dirname(module_path)
+                path = os.path.join(module_path, path)
+        
+        with open(path) as f:
+            code = compile(f.read(), path, 'exec')
+            exec(code, frame.f_globals, frame.f_locals)
+    
     try:
         reload(globals(), _import_order)
     except Exception as exc:
