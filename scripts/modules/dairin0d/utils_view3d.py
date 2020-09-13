@@ -638,6 +638,8 @@ class SmartView3D:
     # https://unspecified.wordpress.com/2012/06/21/calculating-the-gluperspective-matrix-and-other-opengl-matrix-maths/
     # http://stackoverflow.com/questions/18404890/how-to-build-perspective-projection-matrix-no-api
     # http://gamedev.stackexchange.com/questions/71265/why-are-there-different-ways-of-building-projection-matrices
+    # Note: RegionView3D has perspective_matrix, view_matrix, window_matrix
+    # https://docs.blender.org/api/2.80/bpy.types.RegionView3D.html
     
     def __get_axis(self, x, y, z):
         rot = self.rotation
