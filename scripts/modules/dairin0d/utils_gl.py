@@ -198,8 +198,8 @@ def initialize():
             for c in word:
                 x_dx = x + blf_dimensions(font, line+c)[0]
                 
-                if (x_dx) > width:
-                    x_dx = blf_dimensions(font, line)[0]
+                if x_dx > width:
+                    x_dx = x + blf_dimensions(font, line)[0]
                     lines.append(line)
                     line = c
                     x = 0
@@ -219,14 +219,13 @@ def initialize():
                 c = (word if not line else " " + word)
                 x_dx = x + blf_dimensions(font, line+c)[0]
                 
-                if (x_dx) > width:
-                    x_dx = blf_dimensions(font, line)[0]
+                if x_dx > width:
+                    x_dx = x + blf_dimensions(font, line)[0]
                     if not line:
-                        # one word is longer than the width
                         line, x, max_x = cls._split_word(width, x, max_x, word, lines, font)
                     else:
                         lines.append(line)
-                        line = word
+                        line, x, max_x = cls._split_word(width, 0, max_x, word, lines, font)
                     x = 0
                 else:
                     line += c
@@ -261,8 +260,6 @@ def initialize():
             actual_width -- the max width of these lines (may be less than the supplied width).
             """
             
-            line_height = blf_dimensions(font, "!")[1]
-            
             lines = []
             max_x = 0
             for line in text.splitlines():
@@ -270,6 +267,8 @@ def initialize():
                     lines.append("")
                 else:
                     max_x = cls._split_line(width, indent, max_x, line, lines, font)
+            
+            line_height = blf_dimensions(font, "Ig")[1]
             
             return lines, (max_x, len(lines)*line_height)
     
@@ -305,7 +304,7 @@ def initialize():
         # load / unload
         def load(self, filename, size=None, dpi=72):
             font = blf_load(filename)
-            if size is not None: blf_size(font, size, dpi)
+            if size is not None: blf_size(font, int(size), dpi)
             return font
         def unload(self, filename):
             blf_unload(filename)
@@ -316,21 +315,21 @@ def initialize():
         def disable(self, option):
             blf_disable(self.font, blf_options[option])
         
-        # set effects (shadow, blur)
+        # set shadow
         def shadow(self, level, r, g, b, a):
             blf_shadow(self.font, level, r, g, b, a)
         def shadow_offset(self, x, y):
             blf_shadow_offset(self.font, x, y)
-        def blur(self, radius):
-            blf_blur(self.font, radius)
         
-        # set position / rotation / size
+        # set position / rotation / size / color
         def position(self, x, y, z=0.0):
             blf_position(self.font, x, y, z)
         def rotation(self, angle):
             blf_rotation(self.font, angle)
         def size(self, size, dpi=72):
-            blf_size(self.font, size, dpi)
+            blf_size(self.font, int(size), dpi)
+        def color(self, r, g, b, a=1.0):
+            blf_color(self.font, r, g, b, a)
         
         # set clipping / aspect
         def clipping(self, xmin, ymin, xmax, ymax):
@@ -361,7 +360,7 @@ def initialize():
             
             return BatchedText(font, pieces, size)
         
-        def draw(self, text, pos=None, origin=None, width=None, alignment=None):
+        def draw(self, text, pos=None, origin=None, width=None, alignment=None, spacing=1.0):
             font = self.font
             
             if pos is None: # if position not specified, other calculations cannot be performed
@@ -369,26 +368,43 @@ def initialize():
             elif width is not None: # wrap+align
                 lines, size = TextWrapper.wrap_text(text, width, font=font)
                 
+                line_height = blf_dimensions(font, "Ig")[1]
+                topline = blf_dimensions(font, "I")[1]
+                
                 x = pos[0]
                 y = pos[1]
                 z = (pos[2] if len(pos) > 2 else 0)
                 
+                w, h = size[0], size[1] * abs(spacing)
+                
                 if origin:
-                    x -= size[0] * origin[0]
-                    y -= size[1] * origin[1]
+                    x -= w * origin[0]
+                    y -= h * origin[1]
                 
                 if (alignment in (None, 'LEFT')): alignment = 0.0
                 elif (alignment == 'CENTER'): alignment = 0.5
                 elif (alignment == 'RIGHT'): alignment = 1.0
                 
-                x0, y0 = x, y
-                w, h = size
-                for line in lines:
-                    line_size = blf_dimensions(font, line)
-                    x = x0 + (w - line_size[0]) * alignment
-                    blf_position(font, round(x), round(y), z)
-                    blf_draw(font, line)
-                    y += line_size[1]
+                # blf text origin is at lower left corner, and +Y is "up"
+                # But since text is usually read from top to bottom,
+                # consider positive spacing to be "down".
+                if spacing > 0:
+                    x0, y0 = x, y + h
+                    for line in lines:
+                        line_size = blf_dimensions(font, line)
+                        x = x0 + (w - line_size[0]) * alignment
+                        y = y0 - topline
+                        blf_position(font, round(x), round(y), z)
+                        blf_draw(font, line)
+                        y0 -= line_height * spacing
+                else:
+                    x0, y0 = x, y
+                    for line in lines:
+                        line_size = blf_dimensions(font, line)
+                        x = x0 + (w - line_size[0]) * alignment
+                        blf_position(font, round(x), round(y), z)
+                        blf_draw(font, line)
+                        y -= line_height * spacing
             else:
                 x = pos[0]
                 y = pos[1]
@@ -490,6 +506,7 @@ def initialize():
     int1buf1 = Buffer(GL_INT, 1)
     int1buf2 = Buffer(GL_INT, 1)
     int1buf3 = Buffer(GL_INT, 1)
+    int4buf0 = Buffer(GL_INT, 4)
     float1buf0 = Buffer(GL_FLOAT, 1)
     float1buf1 = Buffer(GL_FLOAT, 1)
     float2buf0 = Buffer(GL_FLOAT, 2)
@@ -572,7 +589,7 @@ def initialize():
             glGetFloatv(GL_DEPTH_RANGE, float2buf0)
             return DepthRange(*float2buf0)
         def _set(self, instance, value):
-            glDepthRange(value[0], value[1])
+            glDepthRange(float(value[0]), float(value[1]))
         add_descriptor("DepthRange", _get, _set)
     
     if hasattr(bgl, "glPolygonOffset"):
@@ -583,8 +600,17 @@ def initialize():
             glGetFloatv(GL_POLYGON_OFFSET_UNITS, float2buf1)
             return PolygonOffset(float2buf0[0], float2buf1[0])
         def _set(self, instance, value):
-            glPolygonOffset(value[0], value[1])
+            glPolygonOffset(float(value[0]), float(value[1]))
         add_descriptor("PolygonOffset", _get, _set)
+    
+    if hasattr(bgl, "glScissor"):
+        from bgl import GL_SCISSOR_BOX, glScissor
+        def _get(self, instance, owner):
+            glGetIntegerv(GL_SCISSOR_BOX, int4buf0)
+            return tuple(int4buf0)
+        def _set(self, instance, value):
+            glScissor(int(value[0]), int(value[1]), int(value[2]), int(value[3]))
+        add_descriptor("Scissor", _get, _set)
     
     return {"cgl":cgl, "TextWrapper":TextWrapper}
 
