@@ -105,6 +105,26 @@ def apply_shapekeys(obj):
         # This seems to be the only way to remove a shape key
         bpy.ops.object.shape_key_remove(all=False)
 
+def apply_modifier(name, apply_as='DATA', keep_modifier=False):
+    try:
+        # In Blender 2.90, the apply_as argument was removed from
+        # modifier_apply(), and modifier_apply_as_shapekey() was added
+        if bpy.app.version < (2, 90, 0):
+            bpy.ops.object.modifier_apply(modifier=name, apply_as=apply_as)
+        else:
+            if apply_as == 'SHAPE':
+                bpy.ops.object.modifier_apply_as_shapekey(modifier=name, keep_modifier=keep_modifier)
+            else:
+                bpy.ops.object.modifier_apply(modifier=name)
+        
+        return 'APPLIED'
+    except RuntimeError as exc:
+        #print(repr(exc))
+        exc_msg = exc.args[0].lower()
+        # "Error: Modifier is disabled, skipping apply"
+        is_disabled = ("disab" in exc_msg) or ("skip" in exc_msg)
+        return ('DISABLED' if is_disabled else 'FAILED')
+
 def apply_modifiers(context, objects, idnames, options=(), apply_as='DATA'):
     scene_objs = context.scene.collection.objects
     layer_objs = context.view_layer.objects
@@ -165,14 +185,9 @@ def apply_modifiers(context, objects, idnames, options=(), apply_as='DATA'):
                 if visible_only and not md.show_viewport:
                     is_disabled = True
                 else:
-                    try:
-                        bpy.ops.object.modifier_apply(modifier=md.name, apply_as=apply_as)
-                        successfully_applied = True
-                    except RuntimeError as exc:
-                        #print(repr(exc))
-                        exc_msg = exc.args[0].lower()
-                        # "Error: Modifier is disabled, skipping apply"
-                        is_disabled = ("disab" in exc_msg) or ("skip" in exc_msg)
+                    apply_result = apply_modifier(md.name, apply_as)
+                    successfully_applied = (apply_result == 'APPLIED')
+                    is_disabled = (apply_result == 'DISABLED')
                 
                 if is_disabled and remove_disabled:
                     obj.modifiers.remove(md)
@@ -671,6 +686,54 @@ class BlUtil:
                 view_layer.objects.active = obj
             except RuntimeError: # happens when obj is not in view layer
                 view_layer.objects.active = None
+        
+        @staticmethod
+        def select_activate(objs, mode, active='ANY', view_layer=None):
+            if not view_layer: view_layer = bpy.context.view_layer
+            
+            if objs is None: objs = ()
+            elif isinstance(objs, bpy.types.Object): objs = [objs]
+            
+            layer_objs = set(view_layer.objects)
+            objs = [obj for obj in objs if obj in layer_objs]
+            
+            if mode in ('DESELECT', 'MUTE', 'INVERSE'):
+                for obj in objs:
+                    obj.select_set(False, view_layer=view_layer)
+                
+                if active and (view_layer.objects.active in objs):
+                    view_layer.objects.active = None
+                
+                if mode == 'DESELECT': return
+                
+                layer_objs.difference_update(objs)
+                
+                for obj in layer_objs:
+                    obj.select_set(True, view_layer=view_layer)
+                
+                if active and (not view_layer.objects.active):
+                    view_layer.objects.active = next(iter(layer_objs), None)
+            elif mode in ('SELECT', 'SOLO', 'ISOLATE'):
+                for obj in objs:
+                    obj.select_set(True, view_layer=view_layer)
+                
+                if active:
+                    if (active == 'ANY') and (view_layer.objects.active not in objs):
+                        active = 'LAST'
+                    
+                    if not objs:
+                        view_layer.objects.active = None
+                    elif active == 'FIRST':
+                        view_layer.objects.active = objs[0]
+                    elif active == 'LAST':
+                        view_layer.objects.active = objs[-1]
+                
+                if mode == 'SELECT': return
+                
+                layer_objs.difference_update(objs)
+                
+                for obj in layer_objs:
+                    obj.select_set(False, view_layer=view_layer)
     
     class Collection:
         @staticmethod
@@ -723,6 +786,11 @@ class BlUtil:
             return False
     
     class Depsgraph:
+        @staticmethod
+        def trigger_update():
+            for window in bpy.context.window_manager.windows:
+                window.scene.cursor.location = Vector(window.scene.cursor.location)
+        
         @staticmethod
         def evaluated_vertices(depsgraph, objs=None, matrix=None, origins='NON_GEOMETRY'):
             instances = True
@@ -807,15 +875,23 @@ class BlUtil:
     
     class Scene:
         @staticmethod
-        def line_cast(scene, view_layer, start, end):
+        def line_cast(scene, subset, start, end):
             # returns (result, location, normal, index, object, matrix)
             delta = end - start
-            return BlUtil.Scene.ray_cast(scene, view_layer, start, delta, delta.magnitude)
+            return BlUtil.Scene.ray_cast(scene, subset, start, delta, delta.magnitude)
         
         @staticmethod
-        def ray_cast(scene, view_layer, origin, direction, distance=1.70141e+38):
+        def ray_cast(scene, subset, origin, direction, distance=1.70141e+38):
             # returns (result, location, normal, index, object, matrix)
-            return scene.ray_cast(view_layer, origin, direction, distance=distance)
+            if bpy.app.version >= (2, 91, 0):
+                # Expects a depsgraph
+                if isinstance(subset, bpy.types.ViewLayer):
+                    subset = subset.depsgraph
+            else:
+                # Expects a view layer
+                if isinstance(subset, bpy.types.Depsgraph):
+                    subset = subset.view_layer_eval
+            return scene.ray_cast(subset, origin, direction, distance=distance)
         
         @staticmethod
         def bounding_box(scene, matrix=None, exclude=()):
