@@ -28,6 +28,7 @@ import ast
 import shutil
 
 import bpy
+import bpy.utils.previews
 
 from mathutils import Vector, Matrix, Quaternion, Euler, Color
 
@@ -67,6 +68,7 @@ class AddonManager:
         
         self.name = info["name"] # displayable name
         self.path = info["path"] # directory of the main file
+        self.main_file = info["main_file"] # file path of the main module
         self.module_name = info["module_name"]
         self.is_textblock = info["is_textblock"]
         self.storage_path = info["config_path"]
@@ -81,6 +83,10 @@ class AddonManager:
         
         self._on_register = []
         self._on_unregister = []
+        
+        self._keymap_registrators = []
+        
+        self.previews = AddonPreviews(self)
         
         self.__init_config_storages()
         
@@ -123,6 +129,8 @@ class AddonManager:
         
         self._Runtime = type(name_runtime, (AttributeHolder,), {})
         self._runtime = self._Runtime()
+        
+        self._settings = AddonSettings(self)
     
     # If this is a textblock, its module will be topmost
     # and will have __name__ == "__main__".
@@ -200,12 +208,13 @@ class AddonManager:
         
         config_path = os.path.join(config_path, config)
         
-        return dict(name=name, path=path, config_path=config_path,
+        return dict(name=name, path=path, main_file=_path, config_path=config_path,
                     module_name=module_name, is_textblock=is_textblock,
                     module_locals=module_locals, module_globals=module_globals)
     #========================================================================#
     
     # ===== PREFERENCES / EXTERNAL / INTERNAL ===== #
+    
     # Prevent accidental assignment
     Preferences = property(lambda self: self._Preferences)
     External = property(lambda self: self._External)
@@ -217,6 +226,7 @@ class AddonManager:
     external = property(lambda self: self.external_attr(self.storage_name_external))
     internal = property(lambda self: self.internal_attr(self.storage_name_internal))
     runtime = property(lambda self: self._runtime)
+    settings = property(lambda self: self._settings)
     
     @classmethod
     def external_attr(cls, name):
@@ -230,16 +240,24 @@ class AddonManager:
     
     @classmethod
     def _find_internal_storage(cls):
-        screen = bpy.data.screens.get(cls._screen_name)
+        # if bpy.data is RestrictContext, it contains almost nothing
+        screens = getattr(bpy.data, "screens", None)
+        if not screens: return None
+        
+        screen = screens.get(cls._screen_name)
+        
         if (not screen) or (not screen.get(cls._screen_mark)):
-            for screen in bpy.data.screens:
+            for screen in screens:
                 if screen.name == "temp": continue
                 # When file browser is open, a temporary screen exists with "-nonnormal" suffix
                 if screen.name.endswith("-nonnormal"): continue
+                
                 cls._screen_name = screen.name
                 if screen.get(cls._screen_mark): return screen
-            screen = bpy.data.screens.get(cls._screen_name)
+            
+            screen = screens.get(cls._screen_name)
             screen[cls._screen_mark] = True
+        
         return screen
     
     def path_resolve(self, path, coerce=True):
@@ -307,12 +325,17 @@ class AddonManager:
     #========================================================================#
     
     # ===== HANDLERS AND TYPE EXTENSIONS ===== #
+    
     def on_register(self, callback):
         self._on_register.append(callback)
         return callback
     
     def on_unregister(self, callback):
         self._on_unregister.append(callback)
+        return callback
+    
+    def on_register_keymaps(self, callback):
+        self._keymap_registrators.append(callback)
         return callback
     
     @property
@@ -565,6 +588,7 @@ class AddonManager:
     #========================================================================#
     
     # ===== REGISTER / UNREGISTER ===== #
+    
     __prop_callbacks = ("items", "update", "get", "set", "poll")
     def __register_class_props(self, cls, parents=()):
         prop_infos = dict(BpyProp.iterate(cls, inherited=True))
@@ -689,6 +713,12 @@ class AddonManager:
             callback()
         
         self.status = 'REGISTERED'
+        
+        self.register_keymaps()
+    
+    def register_keymaps(self):
+        for callback in self._keymap_registrators:
+            callback()
     
     def unregister_keymaps(self):
         kc = bpy.context.window_manager.keyconfigs.addon
@@ -712,11 +742,45 @@ class AddonManager:
                 elif (kmi.idname == "wm.call_panel") and (kmi.properties.name in panel_idnames):
                     km.keymap_items.remove(kmi)
     
+    def __unload_modules(self):
+        # This is only used to simplify development/debugging
+        # (Blender only reimports the main module after it was
+        # modified, but changes in submodules do not force a reload)
+        
+        main_path = self.main_file
+        main_dir = os.path.dirname(main_path)
+        
+        # Unload modules only in debug/development environment
+        # (user-installed addons have a local dairin0d library)
+        if os.path.isdir(os.path.join(main_dir, "dairin0d")): return
+        
+        filename = os.path.basename(main_path)
+        single_file = (filename.lower() != "__init__.py")
+        
+        addon_modules = []
+        
+        for module_name, module in sys.modules.items():
+            # Some modules don't have __file__ attribute, some have None
+            module_path = getattr(module, "__file__", None)
+            if not module_path: continue
+            
+            if single_file:
+                if module_path == main_path:
+                    addon_modules.append(module_name)
+            else:
+                if os.path.dirname(module_path) == main_dir:
+                    addon_modules.append(module_name)
+        
+        for module_name in addon_modules:
+            del sys.modules[module_name]
+    
     def unregister(self):
         self.status = 'UNREGISTRATION'
         
         for callback in self._on_unregister:
             callback()
+        
+        self.previews.clear()
         
         self.remove(all=True)
         
@@ -734,10 +798,13 @@ class AddonManager:
         self.classes_new.clear() # in case something was added but not registered
         
         self.status = 'UNREGISTERED'
+        
+        self.__unload_modules()
     
     #========================================================================#
     
     # ===== REGISTRABLE TYPES DECORATORS ===== #
+    
     def __add_class(self, cls, mixins=None):
         if mixins:
             if isinstance(mixins, type): mixins = (mixins,)
@@ -1288,6 +1355,114 @@ class AddonManager:
             return preset_cls
         
         return decorator
+
+#========================================================================#
+
+class AddonPreviews:
+    def __init__(self, addon):
+        self._addon = addon
+        self._previews = {}
+    
+    def __getitem__(self, name):
+        # Note: pcoll is a collection, so bool(pcoll) is (len(pcoll) != 0)
+        pcoll = self._previews.get(name, None)
+        if pcoll is None:
+            pcoll = bpy.utils.previews.new()
+            self._previews[name] = pcoll
+        return pcoll
+    
+    def clear(self, name=None):
+        if name is None:
+            for pcoll in self._previews.values():
+                bpy.utils.previews.remove(pcoll)
+            self._previews.clear()
+        else:
+            pcoll = self._previews.get(name, None)
+            if pcoll:
+                bpy.utils.previews.remove(pcoll)
+                self._previews.pop(name)
+
+#========================================================================#
+
+class AddonSettings:
+    "Gets properties from preferences or internal storage, with support for overriding"
+    
+    _addon = None
+    _internal = None
+    _preferences = None
+    
+    def __init__(self, addon):
+        self._addon = addon
+        
+        addon.on_register(self._cache)
+        addon.on_unregister(self._clear)
+        
+        # Frequently searching for internal storage may cause slowdowns?
+        # Cache the value once each frame just in case.
+        @addon.timer(persistent=True)
+        def settings_updater():
+            self._cache()
+            return 0
+    
+    def __bool__(self):
+        self._cache()
+        return bool(self._internal)
+    
+    def __getattr__(self, name):
+        return getattr(self._get_storage(name), name)
+    
+    def __setattr__(self, name, value):
+        if name.startswith("_"):
+            self.__dict__[name] = value
+        else:
+            setattr(self._get_storage(name), name, value)
+    
+    def __getitem__(self, key):
+        if key == "internal":
+            if not self._internal: self._cache()
+            return self._internal
+        elif key in ("prefs", "preferences"):
+            if not self._preferences: self._cache()
+            return self._preferences
+        else:
+            raise KeyError(f"Unrecognized settings key \"{key}\"")
+    
+    def __call__(self, name):
+        "Use for UI layout calls. E.g. layout.prop(*settings('propname'))"
+        storage = self._get_storage(name)
+        return (storage, name)
+    
+    def _cache(self):
+        self._internal = self._addon.internal
+        self._preferences = self._addon.preferences
+        return bool(self._internal)
+    
+    def _clear(self):
+        self._internal = None
+        self._preferences = None
+    
+    def _get_storage(self, name):
+        if not self._internal: self._cache()
+        
+        prefs, internal = self._preferences, self._internal
+        in_prefs = hasattr(prefs, name)
+        in_internal = internal and hasattr(internal, name)
+        
+        if in_prefs and in_internal:
+            name_override = name+"_override"
+            if hasattr(prefs, name_override):
+                in_prefs = getattr(prefs, name_override)
+            elif hasattr(internal, name_override):
+                in_prefs = not getattr(internal, name_override)
+        
+        if in_prefs:
+            return prefs
+        elif in_internal:
+            return internal
+        elif not internal:
+            raise RuntimeError("addon.internal is unavailable")
+        else:
+            raise AttributeError(f"Addon has no \"{name}\" setting")
 
 #========================================================================#
 
