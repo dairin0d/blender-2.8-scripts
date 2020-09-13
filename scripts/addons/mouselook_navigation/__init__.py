@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 2, 6),
+    "version": (1, 2, 7),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -53,6 +53,7 @@ if "dairin0d" in locals(): importlib.reload(dairin0d)
 exec(("" if importlib.util.find_spec("dairin0d") else "from . ")+"import dairin0d")
 
 dairin0d.load(globals(), {
+    "utils_blender": "ToggleObjectMode, BlUtil",
     "utils_view3d": "SmartView3D, RaycastResult",
     "utils_userinput": "InputKeyMonitor, ModeStack, KeyMapUtils",
     "utils_gl": "cgl",
@@ -905,7 +906,8 @@ class MouselookNavigation:
         if addon_prefs.zbrush_method == 'ZBUFFER':
             cast_result = self.sv.depth_cast(mouse_region, depthcast_radius)
         elif addon_prefs.zbrush_method == 'RAYCAST':
-            cast_result = self.sv.ray_cast(mouse_region, raycast_radius)
+            with ToggleObjectMode('OBJECT' if context.mode == 'SCULPT' else None):
+                cast_result = self.sv.ray_cast(mouse_region, raycast_radius)
         else: # SELECTION
             cast_result = RaycastResult() # Auto Depth is useless with ZBrush mode anyway
         
@@ -948,7 +950,8 @@ class MouselookNavigation:
                 
                 if wrk_pos > self.zbrush_border:
                     if addon_prefs.zbrush_method == 'SELECTION':
-                        cast_result = self.sv.select(mouse_region)
+                        with ToggleObjectMode('OBJECT' if context.mode == 'SCULPT' else None):
+                            cast_result = self.sv.select(mouse_region)
                     
                     if cast_result.success: return {'PASS_THROUGH'}
             
