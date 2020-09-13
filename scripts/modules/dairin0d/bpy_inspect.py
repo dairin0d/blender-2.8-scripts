@@ -73,6 +73,17 @@ class BlRna:
         return None
     
     @staticmethod
+    def is_valid(obj):
+        if not obj: return False
+        try:
+            # TypeError: descriptor 'as_pointer' of 'bpy_struct' object needs an argument
+            #obj.as_pointer()
+            id_data = obj.id_data
+            return True
+        except ReferenceError:
+            return False
+    
+    @staticmethod
     def parent(obj, n=-1, coerce=True):
         path_parts = obj.path_from_id().split(".")
         if len(path_parts) <= 1: return obj.id_data
