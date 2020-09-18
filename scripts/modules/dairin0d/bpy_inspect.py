@@ -137,6 +137,19 @@ class BlRna:
             else:
                 if hasattr(rna_prop, rna_name): bpy_args[bpy_name] = BlRna.serialize_value(getattr(rna_prop, rna_name), False)
         
+        def fix_enum_default():
+            # Some built-in properties may have invalid defaults.
+            # E.g. ColorManagedInputColorspaceSettings.name has
+            # 'NONE' as default, but it's not a recognized value.
+            items = bpy_args["items"]
+            item_keys = {item[0] for item in items}
+            value = bpy_args["default"]
+            if isinstance(value, str):
+                if value not in item_keys:
+                    bpy_args["default"] = items[0][0]
+            else:
+                bpy_args["default"] = {key for key in value if key in item_keys}
+        
         map_arg("is_hidden", 'HIDDEN', True)
         map_arg("is_skip_save", 'SKIP_SAVE', True)
         map_arg("is_animatable", 'ANIMATABLE', True)
@@ -167,6 +180,7 @@ class BlRna:
         elif type_id == "EnumProperty":
             map_arg(("default_flag" if rna_prop.is_enum_flag else "default"), "default")
             map_arg("enum_items", "items")
+            fix_enum_default()
         else:
             # Caution: fixed_type returns a blender struct, not the original class
             map_arg("fixed_type", "type")
