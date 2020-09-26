@@ -715,6 +715,29 @@ class AddonManager:
         self.status = 'REGISTERED'
         
         self.register_keymaps()
+        
+        self.__fix_gizmos()
+    
+    def __fix_gizmos(self):
+        # Bug in blender: if an addon is enabled by default, gizmos
+        # (or at least the gizmos with custom keymaps) won't react to
+        # user input unless they are registered during normal runtime
+        
+        gizmo_groups = [cls for cls in self.classes if issubclass(cls, bpy.types.GizmoGroup)]
+        
+        for cls in gizmo_groups:
+            try:
+                bpy.utils.unregister_class(cls)
+            except RuntimeError:
+                print(f"addon {self.name}: could not unregister {cls}")
+        
+        @self.timer(persistent=False)
+        def re_register_gizmos():
+            for cls in gizmo_groups:
+                try:
+                    bpy.utils.register_class(cls)
+                except RuntimeError:
+                    print(f"addon {self.name}: could not unregister {cls}")
     
     def register_keymaps(self):
         for callback in self._keymap_registrators:
