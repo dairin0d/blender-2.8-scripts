@@ -735,6 +735,81 @@ class BlUtil:
                 for obj in layer_objs:
                     obj.select_set(False, view_layer=view_layer)
     
+    class Data:
+        @staticmethod
+        def all_iter(non_removable=True, exclude=()):
+            bpy_data = bpy.data
+            bpy_prop_collection = bpy.types.bpy_prop_collection
+            
+            for attr_name in dir(bpy_data):
+                if attr_name.startswith("_"): continue
+                if attr_name in exclude: continue
+                attr = getattr(bpy_data, attr_name)
+                if not isinstance(attr, bpy_prop_collection): continue
+                if not (non_removable or hasattr(attr, "remove")): continue
+                yield attr_name, attr
+        
+        @staticmethod
+        def all_map(non_removable=True, exclude=()):
+            return {k: v for k, v in BlUtil.Data.all_iter(non_removable, exclude)}
+        
+        @staticmethod
+        def all_list(non_removable=True, exclude=()):
+            return [v for k, v in BlUtil.Data.all_iter(non_removable, exclude)]
+        
+        @staticmethod
+        def get_users_map(bpy_datas):
+            if hasattr(bpy_datas, "values"): bpy_datas = bpy_datas.values() # dict
+            
+            users_map = {}
+            
+            for bpy_data in bpy_datas:
+                if isinstance(bpy_data, tuple): bpy_data = bpy_data[1] # all_iter()
+                
+                for item in bpy_data:
+                    users_map[(bpy_data, item)] = item.users
+            
+            return users_map
+        
+        @staticmethod
+        def clear_orphaned(users_map0, users_map1):
+            modified = False
+            
+            for key, users0 in users_map0.items():
+                users1 = users_map1.get(key, 0)
+                if users0 == users1: continue
+                if users1 > 0: continue
+                
+                bpy_data, item = key
+                
+                try:
+                    bpy_data.remove(item)
+                except ReferenceError:
+                    pass
+                
+                users_map1.pop(key, None)
+                
+                modified = True
+            
+            return modified
+        
+        class OrphanCleanup:
+            def __init__(self, exclude=()):
+                self.exclude = exclude
+            
+            def __enter__(self):
+                self.bpy_datas = BlUtil.Data.all_list(False, exclude=self.exclude)
+                self.users_map0 = BlUtil.Data.get_users_map(self.bpy_datas)
+            
+            def __exit__(self, exc_type, exc_value, exc_traceback):
+                bpy_datas = self.bpy_datas
+                users_map0 = self.users_map0
+                users_map1 = BlUtil.Data.get_users_map(bpy_datas)
+                
+                while BlUtil.Data.clear_orphaned(users_map0, users_map1):
+                    users_map0 = users_map1
+                    users_map1 = BlUtil.Data.get_users_map(bpy_datas)
+    
     class Collection:
         @staticmethod
         def map_children(coll, cache=None):
