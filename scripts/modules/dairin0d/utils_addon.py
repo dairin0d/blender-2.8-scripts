@@ -324,6 +324,70 @@ class AddonManager:
                 return
     #========================================================================#
     
+    # ===== SPECIAL PROP TEMPLATES ===== #
+    
+    __prop_keymap_cache = {}
+    
+    def prop_keymap(self, *args, **kwargs):
+        if not (("update" in kwargs) or ("get" in kwargs)):
+            update = self.__prop_keymap_cache.get("update", None)
+            
+            if not update:
+                # Note: update callback has to be a function (not a method)
+                # and have exactly 2 positional arguments
+                update = (lambda dummy_self, context: self.update_keymaps())
+                self.__prop_keymap_cache["update"] = update
+            
+            kwargs["update"] = update
+        
+        return prop(*args, **kwargs)
+    
+    def prop_keymap_key(self, name=None, description=None, **kwargs):
+        if name and (description is None):
+            name = f"{name} key"
+            description = f"Default key for {name}"
+        
+        items = self.__prop_keymap_cache.get("key_items", None)
+        if items is None:
+            items = [(item.identifier, item.name, item.description, item.icon, item.value)
+                     for item in bpy.types.KeyMapItem.bl_rna.properties["type"].enum_items]
+            self.__prop_keymap_cache["key_items"] = items
+        
+        return self.prop_keymap(name=name, description=description, items=items)
+    
+    def prop_keymap_value(self, name=None, description=None, **kwargs):
+        if name and (description is None):
+            name = f"{name} event"
+            description = f"Default event for {name}"
+        
+        items = self.__prop_keymap_cache.get("value_items", None)
+        if items is None:
+            items = [(item.identifier, item.name, item.description, item.icon, item.value)
+                     for item in bpy.types.KeyMapItem.bl_rna.properties["value"].enum_items]
+            self.__prop_keymap_cache["value_items"] = items
+        
+        return self.prop_keymap(name=name, description=description, items=items)
+    
+    def prop_keymap_mods(self, name=None, description=None, **kwargs):
+        if name and (description is None):
+            name = f"{name} modifiers"
+            description = f"Default modifiers for {name}"
+        
+        items = self.__prop_keymap_cache.get("mods_items", None)
+        if items is None:
+            items = [
+                ('any', "Any", "Any"),
+                ('alt', "Alt", "Alt"),
+                ('shift', "Shift", "Shift"),
+                ('ctrl', "Ctrl", "Ctrl"),
+                ('oskey', "OS key", "OS key"),
+            ]
+            self.__prop_keymap_cache["mods_items"] = items
+        
+        return self.prop_keymap(name=name, description=description, items=items)
+    
+    #========================================================================#
+    
     # ===== HANDLERS AND TYPE EXTENSIONS ===== #
     
     def on_register(self, callback):
@@ -764,6 +828,10 @@ class AddonManager:
                     km.keymap_items.remove(kmi)
                 elif (kmi.idname == "wm.call_panel") and (kmi.properties.name in panel_idnames):
                     km.keymap_items.remove(kmi)
+    
+    def update_keymaps(self):
+        self.unregister_keymaps()
+        self.register_keymaps()
     
     def __unload_modules(self):
         # This is only used to simplify development/debugging
@@ -1317,6 +1385,12 @@ class AddonManager:
                 def draw_popup(layout, text="", icon='PRESET'):
                     layout.operator(preset_cls.op_selector, text=text, icon=icon)
                 preset_cls.draw_popup = draw_popup
+            
+            def show_popup():
+                def popup_draw(self, context):
+                    preset_cls.draw_selector(self.layout, context)
+                bpy.context.window_manager.popover(popup_draw)
+            preset_cls.show_popup = show_popup
             
             # Import / Export preset(s) #
             # ========================= #
