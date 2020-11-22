@@ -23,15 +23,68 @@ import itertools
 
 #============================================================================#
 
+def _range_count(size, step):
+    as_int = isinstance(size, int) and isinstance(step, int)
+    return ((size // step) if as_int else int(size / step))
+
+def frange(start, stop=None, step=1):
+    if stop is None: start, stop = 0, start
+    
+    if isinstance(step, str):
+        # Inspired by https://stackoverflow.com/a/41274854
+        from fractions import Fraction
+        start = Fraction(str(start))
+        stop = Fraction(str(stop))
+        step = Fraction(step)
+        
+        for i in range(_range_count(stop - start, step)):
+            yield float(start + i * step)
+    else:
+        for i in range(_range_count(stop - start, step)):
+            yield start + i * step
+
+def ndrange(start, stop=None, step=1):
+    import numpy as np
+    
+    axes = len(start)
+    
+    if stop is None: start, stop = (0,)*axes, start
+    if not hasattr(step, "__len__"): step = (step,)*axes
+    
+    if (len(stop) != axes) or (len(step) != axes):
+        raise ValueError("ndrange(): arguments must have the same length")
+    
+    counts = np.array([_range_count(v1 - v0, dv) for v0, v1, dv in zip(start, stop, step)])
+    if np.any(counts <= 0): return
+    indices = np.zeros(axes, dtype=int)
+    start = np.asarray(start)
+    step = np.asarray(step)
+    
+    max_axis = axes - 1
+    
+    while True:
+        for i in range(counts[0]):
+            indices[0] = i
+            yield start + indices * step
+        
+        if axes < 2: return
+        
+        for axis in range(1, axes):
+            indices[axis] += 1
+            if indices[axis] < counts[axis]: break
+            if axis == max_axis: return
+            indices[axis] = 0
+
 def divide():
     from math import copysign
     inf = math.inf
     nan = math.nan
+    isnan = math.isnan
     def divide(x, y):
         try:
             return x / y
         except ZeroDivisionError:
-            if (x == nan) or (y == nan): return nan
+            if isnan(x) or isnan(y): return nan
             return copysign(inf, x) * copysign(1.0, y)
     return divide
 divide = divide()
@@ -64,6 +117,24 @@ def clamp(v, v_min, v_max):
     # For NaN, min/max return the first argument
     # Here, we assume that min and max are not NaN
     return min(v_max, max(v_min, v))
+
+def nan_min(*args, default=None):
+    from math import isnan
+    if len(args) == 1: args = args[0]
+    args = [arg for arg in args if not ((arg is None) or isnan(arg))]
+    return (min(args) if args else default)
+
+def nan_max(*args, default=None):
+    from math import isnan
+    if len(args) == 1: args = args[0]
+    args = [arg for arg in args if not ((arg is None) or isnan(arg))]
+    return (max(args) if args else default)
+
+def replace_nan(vec, default):
+    from math import isnan
+    if not hasattr(default, "__iter__"):
+        return [(default if isnan(v) else v) for v in vec]
+    return [(d if isnan(v) else v) for v, d in zip(vec, default)]
 
 def round_step(x, s=1.0):
     #return math.floor(x * s + 0.5) / s
