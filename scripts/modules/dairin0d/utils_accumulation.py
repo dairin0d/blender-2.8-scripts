@@ -394,9 +394,9 @@ class Aggregator:
             #        self._subseq_ends = self._endswith(value, self._subseq)
 
 class VectorAggregator:
-    def __init__(self, size, type, queries=None, covert=None, epsilon=1e-6):
+    def __init__(self, size, type, queries=None, convert=None, epsilon=1e-6):
         self._type = type
-        self.axes = tuple(Aggregator(type, queries, covert, epsilon) for i in range(size))
+        self.axes = tuple(Aggregator(type, queries, convert, epsilon) for i in range(size))
     
     def reset(self):
         for axis in self.axes:
