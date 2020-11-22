@@ -22,6 +22,7 @@ import blf
 from mathutils import Color, Vector, Matrix, Quaternion, Euler
 
 from .utils_python import DummyObject
+from .bounds import Bounds
 from .utils_gl import TextWrapper
 from .bpy_inspect import BlRna
 
@@ -424,9 +425,9 @@ class BlUI:
                 elif alignment == 'RIGHT':
                     x1 = min(x1, r.x)
             
-            return (Vector((x0, y0)), Vector((x1-x0, y1-y0)))
+            return Bounds.MinSize((x0, y0), (x1-x0, y1-y0))
         else:
-            return (Vector((r.x, r.y)), Vector((r.width, r.height)))
+            return Bounds.MinSize((r.x, r.y), (r.width, r.height))
     
     def point_in_rect(p, r):
         return ((p[0] >= r.x) and (p[0] < r.x + r.width) and (p[1] >= r.y) and (p[1] < r.y + r.height))
