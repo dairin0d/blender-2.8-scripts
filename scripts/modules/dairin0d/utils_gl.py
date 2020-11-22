@@ -59,6 +59,8 @@ def initialize():
     
     from gpu.types import GPUBatch, GPUIndexBuf, GPUOffScreen, GPUShader, GPUVertBuf, GPUVertFormat
     
+    bgl_names = dir(bgl)
+    
     shader_from_builtin = gpu.shader.from_builtin
     
     blf_options = {'ROTATION':blf.ROTATION, 'CLIPPING':blf.CLIPPING, 'SHADOW':blf.SHADOW,
@@ -238,6 +240,8 @@ def initialize():
 
         @classmethod
         def split_text(cls, width, x, max_x, text, lines, font=0):
+            if width is None: width = math.inf
+            
             for line in text.splitlines():
                 if not line:
                     lines.append("")
@@ -251,14 +255,16 @@ def initialize():
         def wrap_text(cls, text, width, indent=0, font=0):
             """
             Splits text into lines that don't exceed the given width.
-            text -- the text.
-            width -- the width the text should fit into.
-            font -- the id of the typeface as returned by blf.load(). Defaults to 0 (the default font).
-            indent -- the indent of the paragraphs. Defaults to 0.
-            Returns: lines, actual_width
+            text -- the text
+            width -- the width the text should fit into
+            font -- the id of the typeface as returned by blf.load(). Defaults to 0 (the default font)
+            indent -- the indent of the paragraphs. Defaults to 0
+            Returns: lines, size
             lines -- the list of the resulting lines
-            actual_width -- the max width of these lines (may be less than the supplied width).
+            size -- actual (width, height) of these lines
             """
+            
+            if width is None: width = math.inf
             
             lines = []
             max_x = 0
@@ -280,7 +286,6 @@ def initialize():
             self.pieces = pieces
             self.size = size
         
-        # WARNING: modifies BLEND state
         def draw(self, pos, origin=None):
             x = pos[0]
             y = pos[1]
@@ -290,13 +295,23 @@ def initialize():
                 x -= self.size[0] * origin[0]
                 y -= self.size[1] * origin[1]
             
+            prev_blend = cgl.BLEND
+            prev_polygon_smooth = cgl.POLYGON_SMOOTH
+            
             cgl.BLEND = True
+            cgl.POLYGON_SMOOTH = False
             
             font = self.font
             x0, y0 = round(x), round(y)
             for txt, x, y in self.pieces:
                 blf_position(font, x0+x, y0+y, z)
                 blf_draw(font, txt)
+            
+            # Note: blf_draw() resets GL_BLEND (and GL_POLYGON_SMOOTH
+            # since Blender 2.91), so we have to restore them anyway
+            
+            cgl.POLYGON_SMOOTH = prev_polygon_smooth
+            cgl.BLEND = prev_blend
     
     class Text:
         font = 0 # 0 is the default font
@@ -337,86 +352,47 @@ def initialize():
         def aspect(self, aspect):
             blf_aspect(self.font, aspect)
         
-        def compile(self, text, width=None, alignment=None):
+        def compile(self, text, width=None, alignment=None, spacing=1.0):
             font = self.font
             
-            if width is None:
-                lines, size = [text], blf_dimensions(font, text)
-            else:
-                lines, size = TextWrapper.wrap_text(text, width, font=font)
+            line_height = blf_dimensions(font, "Ig")[1]
+            topline = blf_dimensions(font, "I")[1]
+            
+            lines, size = TextWrapper.wrap_text(text, width, font=font)
+            
+            w, h = size[0], size[1] * abs(spacing)
+            
+            size = (w, h)
+            pieces = []
             
             if (alignment in (None, 'LEFT')): alignment = 0.0
             elif (alignment == 'CENTER'): alignment = 0.5
             elif (alignment == 'RIGHT'): alignment = 1.0
             
-            pieces = []
+            # blf text origin is at lower left corner, and +Y is "up"
+            # But since text is usually read from top to bottom,
+            # consider positive spacing to be "down".
+            if spacing > 0: lines = reversed(lines)
+            
+            y_step = line_height * abs(spacing)
+            
             x, y = 0, 0
-            w, h = size
             for line in lines:
-                line_size = blf_dimensions(font, line)
-                x = (w - line_size[0]) * alignment
+                x = (w - blf_dimensions(font, line)[0]) * alignment
                 pieces.append((line, round(x), round(y)))
-                y += line_size[1]
+                y += y_step
             
             return BatchedText(font, pieces, size)
         
         def draw(self, text, pos=None, origin=None, width=None, alignment=None, spacing=1.0):
-            font = self.font
+            if pos is None:
+                # if position is not specified, other calculations cannot be performed
+                blf_draw(self.font, text)
+                return None
             
-            if pos is None: # if position not specified, other calculations cannot be performed
-                blf_draw(font, text)
-            elif width is not None: # wrap+align
-                lines, size = TextWrapper.wrap_text(text, width, font=font)
-                
-                line_height = blf_dimensions(font, "Ig")[1]
-                topline = blf_dimensions(font, "I")[1]
-                
-                x = pos[0]
-                y = pos[1]
-                z = (pos[2] if len(pos) > 2 else 0)
-                
-                w, h = size[0], size[1] * abs(spacing)
-                
-                if origin:
-                    x -= w * origin[0]
-                    y -= h * origin[1]
-                
-                if (alignment in (None, 'LEFT')): alignment = 0.0
-                elif (alignment == 'CENTER'): alignment = 0.5
-                elif (alignment == 'RIGHT'): alignment = 1.0
-                
-                # blf text origin is at lower left corner, and +Y is "up"
-                # But since text is usually read from top to bottom,
-                # consider positive spacing to be "down".
-                if spacing > 0:
-                    x0, y0 = x, y + h
-                    for line in lines:
-                        line_size = blf_dimensions(font, line)
-                        x = x0 + (w - line_size[0]) * alignment
-                        y = y0 - topline
-                        blf_position(font, round(x), round(y), z)
-                        blf_draw(font, line)
-                        y0 -= line_height * spacing
-                else:
-                    x0, y0 = x, y
-                    for line in lines:
-                        line_size = blf_dimensions(font, line)
-                        x = x0 + (w - line_size[0]) * alignment
-                        blf_position(font, round(x), round(y), z)
-                        blf_draw(font, line)
-                        y -= line_height * spacing
-            else:
-                x = pos[0]
-                y = pos[1]
-                z = (pos[2] if len(pos) > 2 else 0)
-                
-                if origin:
-                    size = blf_dimensions(font, text)
-                    x -= size[0] * origin[0]
-                    y -= size[1] * origin[1]
-                
-                blf_position(font, round(x), round(y), z)
-                blf_draw(font, text)
+            batched = self.compile(text, width, alignment, spacing)
+            batched.draw(pos, origin)
+            return batched
     
     cgl.text = Text()
     
@@ -432,7 +408,7 @@ def initialize():
         class Descriptor:
             __doc__ = doc
             def __get__(self, instance, owner):
-                return glIsEnabled(state_id)
+                return bool(glIsEnabled(state_id))
             def __set__(self, instance, value):
                 (glEnable if value else glDisable)(state_id)
         
@@ -510,6 +486,7 @@ def initialize():
     float1buf0 = Buffer(GL_FLOAT, 1)
     float1buf1 = Buffer(GL_FLOAT, 1)
     float2buf0 = Buffer(GL_FLOAT, 2)
+    float4buf0 = Buffer(GL_FLOAT, 4)
     matrixbuf0 = Buffer(GL_FLOAT, 16)
     
     if hasattr(bgl, "glLineWidth"):
@@ -520,6 +497,16 @@ def initialize():
         def _set(self, instance, value):
             glLineWidth(value)
         add_descriptor("LineWidth", _get, _set)
+    
+    if hasattr(bgl, "glBlendColor"):
+        from bgl import glBlendColor
+        GL_BLEND_COLOR = 32773 # absent in bgl (at least in Blender 2.80 - 2.91)
+        def _get(self, instance, owner):
+            glGetFloatv(GL_BLEND_COLOR, float4buf0)
+            return Vector(float4buf0)
+        def _set(self, instance, value):
+            glBlendColor(float(value[0]), float(value[1]), float(value[2]), float(value[3]))
+        add_descriptor("BlendColor", _get, _set)
     
     blend_funcs_k2v, blend_funcs_v2k = map_enum(
         'GL_ZERO', 'GL_ONE',
@@ -546,6 +533,7 @@ def initialize():
         add_descriptor("BlendFunc", _get, _set)
     
     if hasattr(bgl, "glBlendFuncSeparate"):
+        # Note: glBlendFuncSeparate is not present in bgl (at least in Blender 2.80 - 2.91)
         from bgl import GL_BLEND_SRC_RGB, GL_BLEND_DST_RGB, GL_BLEND_SRC_ALPHA, GL_BLEND_DST_ALPHA, glBlendFuncSeparate
         BlendFuncSeparate = namedtuple("BlendFuncSeparate", ("src_rgb", "dst_rgb", "src_alpha", "dst_alpha"))
         def _get(self, instance, owner):
@@ -559,6 +547,30 @@ def initialize():
             glBlendFuncSeparate(blend_funcs_k2v[value[0]], blend_funcs_k2v[value[1]],
                                 blend_funcs_k2v[value[2]], blend_funcs_k2v[value[3]])
         add_descriptor("BlendFuncSeparate", _get, _set)
+    
+    blend_equations_k2v, blend_equations_v2k = map_enum(
+        'GL_FUNC_ADD', 'GL_FUNC_SUBTRACT', 'GL_FUNC_REVERSE_SUBTRACT', 'GL_MIN', 'GL_MAX',
+    )
+    
+    if hasattr(bgl, "glBlendEquation"):
+        from bgl import GL_BLEND_EQUATION_RGB, glBlendEquation
+        def _get(self, instance, owner):
+            glGetIntegerv(GL_BLEND_EQUATION_RGB, int1buf0)
+            return blend_equations_v2k[int1buf0[0]]
+        def _set(self, instance, value):
+            glBlendEquation(blend_equations_k2v[value])
+        add_descriptor("BlendEquation", _get, _set)
+    
+    if hasattr(bgl, "glBlendEquationSeparate"):
+        from bgl import GL_BLEND_EQUATION_RGB, GL_BLEND_EQUATION_ALPHA, glBlendEquationSeparate
+        BlendEquationSeparate = namedtuple("BlendEquationSeparate", ("mode_rgb", "mode_alpha"))
+        def _get(self, instance, owner):
+            glGetIntegerv(GL_BLEND_EQUATION_RGB, int1buf0)
+            glGetIntegerv(GL_BLEND_EQUATION_ALPHA, int1buf1)
+            return BlendEquationSeparate(blend_equations_v2k[int1buf0[0]], blend_equations_v2k[int1buf1[0]])
+        def _set(self, instance, value):
+            glBlendEquationSeparate(blend_equations_k2v[value[0]], blend_equations_k2v[value[1]])
+        add_descriptor("BlendEquationSeparate", _get, _set)
     
     depth_funcs_k2v, depth_funcs_v2k = map_enum(
         'GL_NEVER', 'GL_LESS', 'GL_EQUAL', 'GL_LEQUAL', 'GL_GREATER', 'GL_NOTEQUAL', 'GL_GEQUAL', 'GL_ALWAYS'
@@ -611,6 +623,27 @@ def initialize():
         def _set(self, instance, value):
             glScissor(int(value[0]), int(value[1]), int(value[2]), int(value[3]))
         add_descriptor("Scissor", _get, _set)
+    
+    if hasattr(bgl, "glActiveTexture"):
+        textures_k2v, textures_v2k = {}, {}
+        prefix = "GL_TEXTURE"
+        prefix_len = len(prefix)
+        for name in bgl_names:
+            if not name.startswith(prefix): continue
+            tex_id = name[prefix_len:]
+            if not tex_id.isdigit(): continue
+            tex_id = int(tex_id)
+            value = getattr(bgl, name)
+            textures_k2v[tex_id] = value
+            textures_v2k[value] = tex_id
+        
+        from bgl import GL_ACTIVE_TEXTURE, glActiveTexture
+        def _get(self, instance, owner):
+            glGetIntegerv(GL_ACTIVE_TEXTURE, int1buf0)
+            return textures_v2k[int1buf0[0]]
+        def _set(self, instance, value):
+            glActiveTexture(textures_k2v[value])
+        add_descriptor("ActiveTexture", _get, _set)
     
     return {"cgl":cgl, "TextWrapper":TextWrapper}
 
