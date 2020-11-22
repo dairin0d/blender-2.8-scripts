@@ -1067,6 +1067,9 @@ class SmartView3D:
         snap_depth = ('DEPTH' in snaps)
         if snap_depth: snaps.discard('DEPTH')
         
+        # TODO: when I was porting the library to Blender 2.8,
+        # I removed MeshBaker. Perhaps use MeshEquivalent here?
+        
         if mesh_baker and mesh_baker.finished:
             scene = self.scene
             view_layer = self.view_layer
