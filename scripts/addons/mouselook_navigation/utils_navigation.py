@@ -33,9 +33,8 @@ dairin0d.load(globals(), {
 })
 
 def calc_zbrush_border(area, region, scale=0.05, abs_min=16):
-    clickable_region_size = BlUI.calc_region_rect(area, region, overlap=False)[1]
-    wrk_sz = min(clickable_region_size.x, clickable_region_size.y)
-    return max(wrk_sz*scale, abs_min)
+    size_min = BlUI.calc_region_rect(area, region, overlap=False).size.min()
+    return max(size_min * scale, abs_min)
 
 def calc_selection_center(context, non_obj_zero=False): # View3D area is assumed
     context_mode = context.mode

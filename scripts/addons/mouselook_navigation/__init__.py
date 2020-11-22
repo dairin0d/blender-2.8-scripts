@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 2, 7),
+    "version": (1, 2, 8),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -292,7 +292,7 @@ class MouselookNavigation:
         v3d = context.space_data
         rv3d = context.region_data
         
-        region_pos, region_size = self.sv.region_rect()
+        region_pos, region_size = self.sv.region_rect().get("min", "size", convert=Vector)
         
         userprefs = context.preferences
         drag_threshold = userprefs.inputs.drag_threshold
@@ -887,8 +887,8 @@ class MouselookNavigation:
         
         self.sv = SmartView3D(context, use_matrix=True)
         
-        region_pos, region_size = self.sv.region_rect()
-        clickable_region_pos, clickable_region_size = self.sv.region_rect(False)
+        region_pos, region_size = self.sv.region_rect().get("min", "size", convert=Vector)
+        clickable_region_pos, clickable_region_size = self.sv.region_rect(False).get("min", "size", convert=Vector)
         
         self.zbrush_border = calc_zbrush_border(self.sv.area, self.sv.region)
         
@@ -1048,7 +1048,7 @@ class MouselookNavigation:
         if self.mode_stack.mode is None:
             context.window.cursor_warp(self.mouse0.x, self.mouse0.y)
         elif self.mode_stack.mode in {'FLY', 'FPS'}:
-            focus_proj = self.sv.focus_projected + self.sv.region_rect()[0]
+            focus_proj = self.sv.focus_projected + self.sv.region_rect().get("min", convert=Vector)
             context.window.cursor_warp(focus_proj.x, focus_proj.y)
         
         # TODO: show_low_resolution can be enabled not only for sculpt, but for any paint-like mode
@@ -1147,8 +1147,8 @@ def draw_callback_px(self, context):
         border = calc_zbrush_border(area, region)
         color = addon_prefs.get_color("color_zbrush_border")
         
-        x, y = clickable_rect[0] - full_rect[0]
-        w, h = clickable_rect[1]
+        x, y = clickable_rect.min - full_rect.min
+        w, h = clickable_rect.size
         
         shader = gpu.shader.from_builtin('2D_UNIFORM_COLOR')
         shader.bind()
