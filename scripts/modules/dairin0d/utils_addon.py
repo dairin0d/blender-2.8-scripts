@@ -1394,6 +1394,9 @@ class AddonManager:
             
             # Import / Export preset(s) #
             # ========================= #
+            
+            import_export_ext = os.path.splitext(path)[1]
+            
             preset_cls.op_import = f"{op_prefix}_import"
             @self.Operator(idname=preset_cls.op_import, label="Import preset(s)", description="Import preset(s)", options={'INTERNAL'})
             class OpPresetImport:
@@ -1424,7 +1427,7 @@ class AddonManager:
                 def invoke(self, context, event):
                     if not self.filepath:
                         blend_filepath = os.path.dirname(context.blend_data.filepath)
-                        self.filepath = os.path.join(blend_filepath, self.id)
+                        self.filepath = os.path.join(blend_filepath, self.id) + import_export_ext
                     context.window_manager.fileselect_add(self)
                     return {'RUNNING_MODAL'}
                 def execute(self, context):
@@ -1861,10 +1864,13 @@ class PresetManager:
     def save(self, id=None): # sync the file(s) with runtime data
         if not self.__path: return False
         
-        if not os.path.exists(self.__presets_dir): os.makedirs(self.__presets_dir)
-        path = self.__presets_file
-        
         reseted = os.path.exists(self.__mark_file)
+        
+        if not os.path.exists(self.__presets_dir):
+            os.makedirs(self.__presets_dir)
+            reseted = True
+        
+        path = self.__presets_file
         
         os_remove_all(self.__mark_file)
         
