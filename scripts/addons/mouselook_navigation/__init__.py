@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 2, 9),
+    "version": (1, 3, 0),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -1394,12 +1394,14 @@ class VIEW3D_PT_mouselook_navigation:
         addon_prefs = addon.preferences
         settings = addon_prefs
         
-        with layout.row(align=True):
+        with layout.row():
             layout.label(text="Show/hide:")
-            layout.prop(settings, "show_crosshair", text="", icon='ADD')
-            with layout.row(align=True)(active=settings.show_crosshair):
-                layout.prop(settings, "show_focus", text="", icon='LIGHT_HEMI')
-            layout.prop(settings, "show_zbrush_border", text="", icon='SELECT_SET')
+            layout.prop(addon_prefs, "show_trackball", text="", icon='ORIENTATION_GIMBAL')
+            with layout.row(align=True):
+                layout.prop(settings, "show_crosshair", text="", icon='ADD')
+                with layout.row(align=True)(active=settings.show_crosshair):
+                    layout.prop(settings, "show_focus", text="", icon='LIGHT_HEMI')
+                layout.prop(settings, "show_zbrush_border", text="", icon='SELECT_SET')
         
         with layout.column(align=True):
             layout.prop(settings, "zoom_speed_modifier")
@@ -1440,21 +1442,12 @@ def draw_view3d_header(self, context):
     
     if addon_prefs.show_in_header:
         row = layout.row(align=True)
-        row.prop(addon.preferences, "is_enabled", text="", icon='VIEW3D')
+        
+        if addon_prefs.show_trackball:
+            row.prop(addon_prefs, "is_trackball", text="", icon='ORIENTATION_GIMBAL')
+        
+        row.prop(addon_prefs, "is_enabled", text="", icon='VIEW3D')
         row.popover("VIEW3D_PT_mouselook_navigation_header_popover", text="")
-
-# VIEW_CAMERA
-# VIEW_ZOOM
-# VIS_SEL_11 (already used in header for object type visibility popover)
-# CON_CAMERASOLVER
-# HIDE_OFF
-# RESTRICT_SELECT_OFF
-# RESTRICT_RENDER_OFF
-# OUTLINER_DATA_CAMERA
-# OUTLINER_OB_CAMERA
-# CAMERA_DATA
-# CAMERA_STEREO ?
-# VIEW3D
 
 @addon.PropertyGroup
 class NavigationDirectionFlip:
@@ -1547,6 +1540,13 @@ class ThisAddonPreferences:
     autolevel_trackball_up: False | prop("Trackball Autolevel up", "Try to autolevel 'upright' in Trackball mode")
     autolevel_speed_modifier: 0.0 | prop("Autolevel speed", "Autoleveling speed", min=0.0)
     
+    def _is_trackball_get(self):
+        return bpy.context.preferences.inputs.view_rotate_method == 'TRACKBALL'
+    def _is_trackball_set(self, value):
+        bpy.context.preferences.inputs.view_rotate_method = ('TRACKBALL' if value else 'TURNTABLE')
+    show_trackball: False | prop("Show the trackball/turntable switch", "Display a trackball/turntable indicator in the header")
+    is_trackball: False | prop("Use Trackball orbit", "Use the Trackball orbiting method", get=_is_trackball_get, set=_is_trackball_set)
+    
     def draw(self, context):
         layout = self.layout
         row = layout.row()
@@ -1573,7 +1573,11 @@ class ThisAddonPreferences:
         
         use_universal_input_settings = (self.use_universal_input_settings or len(self.autoreg_keymaps) == 0)
         
-        layout.label(text="General settings:")
+        with layout.row():
+            with layout.row()(alignment='LEFT'):
+                layout.label(text="General settings:")
+            with layout.row()(alignment='RIGHT'):
+                layout.popover("VIEW3D_PT_mouselook_navigation_header_popover", text="3D View Extras")
         
         with layout.box():
             with layout.row()(alignment='LEFT'):
