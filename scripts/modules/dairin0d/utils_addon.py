@@ -32,7 +32,7 @@ import bpy.utils.previews
 
 from mathutils import Vector, Matrix, Quaternion, Euler, Color
 
-from .utils_python import ensure_baseclass, issubclass_safe, add_mixins, AttributeHolder, binary_search, rmtree, os_remove_all
+from .utils_python import ensure_baseclass, issubclass_safe, add_mixins, AttributeHolder, PrimitiveLock, binary_search, rmtree, os_remove_all
 from .utils_text import compress_whitespace, indent, unindent, split_camelcase
 from .bpy_inspect import BlRna, BpyProp, BpyOp, prop, enum_memorizer
 from .utils_ui import messagebox, NestedLayout, BlUI
@@ -86,6 +86,7 @@ class AddonManager:
         
         self._keymap_registrators = []
         self.__prop_keymap_cache = {}
+        self.prop_keymap_lock = PrimitiveLock()
         
         self.previews = AddonPreviews(self)
         
@@ -334,7 +335,11 @@ class AddonManager:
             if not update:
                 # Note: update callback has to be a function (not a method)
                 # and have exactly 2 positional arguments
-                update = (lambda dummy_self, context: self.update_keymaps())
+                def update(dummy_self, context):
+                    if self.prop_keymap_lock: return
+                    with self.prop_keymap_lock:
+                        self.update_keymaps()
+                
                 self.__prop_keymap_cache["update"] = update
             
             kwargs["update"] = update
