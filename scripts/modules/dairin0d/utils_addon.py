@@ -85,6 +85,7 @@ class AddonManager:
         self._on_unregister = []
         
         self._keymap_registrators = []
+        self.__prop_keymap_cache = {}
         
         self.previews = AddonPreviews(self)
         
@@ -325,8 +326,6 @@ class AddonManager:
     #========================================================================#
     
     # ===== SPECIAL PROP TEMPLATES ===== #
-    
-    __prop_keymap_cache = {}
     
     def prop_keymap(self, *args, **kwargs):
         if not (("update" in kwargs) or ("get" in kwargs)):
