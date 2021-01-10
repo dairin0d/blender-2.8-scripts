@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 3, 0),
+    "version": (1, 4, 0),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -58,7 +58,7 @@ dairin0d.load(globals(), {
     "utils_userinput": "InputKeyMonitor, ModeStack, KeyMapUtils",
     "utils_gl": "cgl",
     "utils_ui": "NestedLayout, BlUI",
-    "bpy_inspect": "prop, BlRna",
+    "bpy_inspect": "prop, BlRna, BlEnums",
     "utils_addon": "AddonManager",
 })
 
@@ -1159,6 +1159,18 @@ def draw_callback_px(self, context):
             batch = cgl.batch(shader, 'LINE_LOOP', pos=verts)
             batch.draw(shader)
 
+@addon.timer(persistent=True)
+def background_timer_update():
+    addon_prefs = addon.preferences
+    
+    if addon_prefs.auto_trackball:
+        # In a timer, bpy.context.mode seems to always be 'OBJECT',
+        # and context has a very reduced set of properties
+        view_layer = bpy.context.view_layer
+        mode = BlEnums.mode_from_object(view_layer.objects.active)
+        addon_prefs.is_trackball = (mode in addon_prefs.auto_trackball_modes)
+    
+    return 0 # run each frame
 
 @addon.Operator.execute(idname="mouselook_navigation.autoreg_keymaps_update", label="Update Autoreg Keymaps", description="Update auto-registered keymaps")
 def update_keymaps(activate=True):
@@ -1469,10 +1481,10 @@ class NavigationDirectionFlip:
 
 @addon.Preferences.Include
 class ThisAddonPreferences:
-    prefs_tab: bpy.props.EnumProperty(name="Tab", description="Which tab to show in addon preferences", items=[
+    prefs_tab: 'SETTINGS' | prop("Tab", "Which tab to show in addon preferences", items=[
         ('SETTINGS', "Settings", "Settings"),
         ('ABOUT', "About", "About"),
-    ], default='SETTINGS')
+    ])
     
     is_enabled: True | prop("Enable/disable Mouselook Navigation", "")
     
@@ -1541,11 +1553,18 @@ class ThisAddonPreferences:
     autolevel_speed_modifier: 0.0 | prop("Autolevel speed", "Autoleveling speed", min=0.0)
     
     def _is_trackball_get(self):
-        return bpy.context.preferences.inputs.view_rotate_method == 'TRACKBALL'
+        input_prefs = bpy.context.preferences.inputs
+        return input_prefs.view_rotate_method == 'TRACKBALL'
     def _is_trackball_set(self, value):
-        bpy.context.preferences.inputs.view_rotate_method = ('TRACKBALL' if value else 'TURNTABLE')
+        value = ('TRACKBALL' if value else 'TURNTABLE')
+        input_prefs = bpy.context.preferences.inputs
+        if input_prefs.view_rotate_method != value: input_prefs.view_rotate_method = value
     show_trackball: False | prop("Show the trackball/turntable switch", "Display a trackball/turntable indicator in the header")
     is_trackball: False | prop("Use Trackball orbit", "Use the Trackball orbiting method", get=_is_trackball_get, set=_is_trackball_set)
+    
+    auto_trackball: False | prop("Auto Trackball/Turntable", "Enable automatic switching between Trackball and Turntable in certain object modes")
+    auto_trackball_modes: {} | prop("Auto Trackball modes", "In which object modes to use Trackball",
+        items=[(mode_name, BlEnums.get_mode_name(mode_name), "") for mode_name in sorted(BlEnums.modes)])
     
     def draw(self, context):
         layout = self.layout
@@ -1577,6 +1596,9 @@ class ThisAddonPreferences:
             with layout.row()(alignment='LEFT'):
                 layout.label(text="General settings:")
             with layout.row()(alignment='RIGHT'):
+                with layout.row(align=True)(alignment='RIGHT'):
+                    layout.prop(self, "auto_trackball", text="Auto Trackball", toggle=True)
+                    layout.prop_menu_enum(self, "auto_trackball_modes", text="", icon='TRIA_DOWN')
                 layout.popover("VIEW3D_PT_mouselook_navigation_header_popover", text="3D View Extras")
         
         with layout.box():
