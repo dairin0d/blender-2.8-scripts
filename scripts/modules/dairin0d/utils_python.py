@@ -45,6 +45,13 @@ def dict_to_attrs(obj, d):
             except:
                 pass
 
+def get_or_add(d, key, factory):
+    item = d.get(key)
+    if item is None:
+        item = factory()
+        d[key] = item
+    return item
+
 def compare_epsilon(a, b, epsilon):
     if (epsilon is None) or (not isinstance(a, (int, float))): return (a == b)
     return abs(a - b) <= epsilon
