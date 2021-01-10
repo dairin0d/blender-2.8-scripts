@@ -474,6 +474,27 @@ class BpyData:
             cls.bpy_data_to_type[data_name] = best_type_name
     
     @classmethod
+    def type_names(cls):
+        if not cls.bpy_type_to_data: cls.match_bpy_ID_type_and_data()
+        return cls.bpy_type_to_data.keys()
+    
+    @classmethod
+    def data_names(cls):
+        if not cls.bpy_type_to_data: cls.match_bpy_ID_type_and_data()
+        return cls.bpy_data_to_type.keys()
+    
+    @classmethod
+    def get_type_name(cls, data_name):
+        if not cls.bpy_type_to_data: cls.match_bpy_ID_type_and_data()
+        return cls.bpy_data_to_type.get(data_name)
+    
+    @classmethod
+    def get_data_name(cls, bpy_type):
+        if not cls.bpy_type_to_data: cls.match_bpy_ID_type_and_data()
+        if not isinstance(bpy_type, str): bpy_type = bpy_type.bl_rna.identifier
+        return cls.bpy_type_to_data.get(bpy_type)
+    
+    @classmethod
     def to_data(cls, bpy_type):
         # Since some version of Blender 2.8 beta, bpy.data is empty
         # (not populated) during addon loading (maybe Blender bug?)
@@ -1299,7 +1320,12 @@ class BlEnums:
     def is_mode_valid(cls, mode, obj=None):
         return (mode in cls.object_mode_support[obj.type] if obj else mode == 'OBJECT')
     
-    # Panel.bl_context is not a enum property, so we can't get all possible values through introspection
+    @classmethod
+    def get_mode_name(cls, mode):
+        mode = mode.replace("GPENCIL", "GREASE_PENCIL")
+        return " ".join([word.capitalize() for word in mode.split("_")])
+    
+    # Panel.bl_context is not an enum property, so we can't get all possible values through introspection
     panel_contexts = {
         'VIEW_3D':{
             "mesh_edit":'EDIT_MESH',
