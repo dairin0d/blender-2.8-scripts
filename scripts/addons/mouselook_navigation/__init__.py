@@ -1163,6 +1163,15 @@ def draw_callback_px(self, context):
 def background_timer_update():
     addon_prefs = addon.preferences
     
+    if not addon.runtime.keymaps_initialized:
+        if not KeyMapUtils.exists(MouselookNavigation.bl_idname):
+            # Important: we cannot do this immediately on registration,
+            # or Blender will crash if the user tries to reload scripts
+            # (specifically, the crash occurs when trying to serialize
+            # operator properties of some WindowManager keymaps).
+            update_keymaps(True)
+        addon.runtime.keymaps_initialized = True
+    
     if addon_prefs.auto_trackball:
         # In a timer, bpy.context.mode seems to always be 'OBJECT',
         # and context has a very reduced set of properties
@@ -1676,13 +1685,7 @@ def register():
     
     addon.draw_handler_add(bpy.types.SpaceView3D, draw_callback_px, (None, None), 'WINDOW', 'POST_PIXEL')
     
-    if not KeyMapUtils.exists(MouselookNavigation.bl_idname):
-        # Strange bug:
-        # If there was no interaction with 3D view since Blender was launched,
-        # then addon reloading (F8) will cause blender to crash, if the next line
-        # is not commented. If there WAS some interaction with 3D view,
-        # then addon reloading would work fine.
-        update_keymaps(True)
+    addon.runtime.keymaps_initialized = False
 
 def unregister():
     update_keymaps(False)
