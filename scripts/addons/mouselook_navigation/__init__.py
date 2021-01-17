@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 4, 0),
+    "version": (1, 4, 1),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -1198,17 +1198,18 @@ def update_keymaps(activate=True):
         keymaps = wm.keyconfigs.user.keymaps
         
         if len(addon_prefs.autoreg_keymaps) == 0 and addon_prefs.use_default_keymap:
-            kmi = next(KeyMapUtils.search("view3d.rotate"), (None, None, None))[2]
-            if kmi:
+            # Since Blender 2.91, there are multiple view3d.rotate keymaps
+            default_keys = {kmi.type for kc, km, kmi in KeyMapUtils.search("view3d.rotate")}
+            for default_key in sorted(default_keys):
                 ark = addon_prefs.autoreg_keymaps.add()
                 ark.keymaps = {'3D View'}
-                ark.value_type = kmi.type+":"+"ANY" #kmi.value
-                ark.any = True #kmi.any
-                ark.shift = False #kmi.shift
-                ark.ctrl = False #kmi.ctrl
-                ark.alt = False #kmi.alt
-                ark.oskey = False #kmi.oskey
-                ark.key_modifier = "" #kmi.key_modifier
+                ark.value_type = default_key+":"+"ANY"
+                ark.any = True
+                ark.shift = False
+                ark.ctrl = False
+                ark.alt = False
+                ark.oskey = False
+                ark.key_modifier = ""
         
         kmi_to_insert = {}
         
