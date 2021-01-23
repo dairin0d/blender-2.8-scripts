@@ -862,16 +862,21 @@ class SmartView3D:
             else:
                 sel.selected = {}
         
-        # Note: view3d.select does NOT select anything in Particle Edit mode
-        
-        is_object_selection = (mode == 'OBJECT') or (mode in BlEnums.paint_sculpt_modes)
+        is_object_selection = BlEnums.mode_infos[mode].type not in ('EDIT', 'POSE')
         
         if select_mode:
             # IMPORTANT: make sure it's a copy, or we will be basically assigning itself to iself
             prev_select_mode = tuple(tool_settings.mesh_select_mode)
             tool_settings.mesh_select_mode = ('VERT' in select_mode, 'EDGE' in select_mode, 'FACE' in select_mode)
         
-        if obj_too:
+        set_mode_afterwards = None
+        
+        if mode == 'PARTICLE':
+            # Blender API does not seem to provide access to particle selection state
+            set_mode_afterwards = 'PARTICLE_EDIT'
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.view3d.select(context_override, 'EXEC_DEFAULT', location=xy, **kwargs)
+        elif obj_too:
             kwargs["extend"] = False
             kwargs["deselect"] = False
             kwargs["toggle"] = False
@@ -914,6 +919,9 @@ class SmartView3D:
                 else:
                     selected_object = next(iter(sel_obj), (None, None))[0]
         
+        if set_mode_afterwards:
+            bpy.ops.object.mode_set(mode=set_mode_afterwards)
+        
         if select_mode:
             # This must be done AFTER computing the result, since apparently
             # mesh_select_mode immediately deselects not-enabled types of elements.
@@ -928,7 +936,6 @@ class SmartView3D:
             elem_attrs = selected_element_attrs,
             bmesh = selected_bmesh,
             bkg_obj = background_object)
-        #return (selected_object, selected_element, selected_element_attrs, selected_bmesh, background_object)
     
     def __calc_search_pattern(r, metric):
         points = []
@@ -1048,7 +1055,6 @@ class SmartView3D:
         if normal.magnitude < 0.5: normal = -self.forward
         
         return RaycastResult(True, location=center, normal=normal)
-        #return (True, None, Matrix(), center, normal)
     
     # grid/increment & axis locks (& matrix) are not represented here, because
     # they are not involved in finding an element/position/normal under the mouse
