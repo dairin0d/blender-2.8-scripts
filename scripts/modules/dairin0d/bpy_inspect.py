@@ -1223,6 +1223,66 @@ bpy_file_icons = {
 
 # ===== ENUMS ===== #
 
+class ObjectModeInfo:
+    context_modes = {item.identifier for item in bpy.types.Context.bl_rna.properties["mode"].enum_items}
+    object_modes = {item.identifier for item in bpy.types.Object.bl_rna.properties["mode"].enum_items}
+    
+    def __bool__(self):
+        return (self.context in self.context_modes) and (self.object in self.object_modes)
+    
+    def __init__(self, context, object, type, subtype=None):
+        self.context = context
+        self.object = object
+        self.type = type
+        self.subtype = subtype
+        
+        name = (object if len(object) >= len(context) else context)
+        name = name.replace("GPENCIL", "GREASE_PENCIL")
+        self.name = " ".join([word.capitalize() for word in name.split("_")])
+
+class ObjectTypeInfo:
+    object_types = {item.identifier for item in bpy.types.Object.bl_rna.properties["type"].enum_items}
+    
+    def __bool__(self):
+        return self.name in self.object_types
+    
+    def __init__(self, name, data_name, features, modes, conversions=None):
+        self.name = name
+        self.data_name = data_name
+        self.data_type = (getattr(bpy.types, self.data_name, None) if self.data_name else None)
+        self.features = features
+        self.modes = self.parse_modes(modes)
+        self.context_modes = {mode.context: mode for mode in self.modes}
+        self.object_modes = {mode.object: mode for mode in self.modes}
+        self.conversions = self.parse_conversions(conversions)
+    
+    @classmethod
+    def parse_conversions(cls, conversions):
+        if not conversions: return {}
+        
+        version = (2, 80, 0)
+        
+        if isinstance(conversions, dict):
+            return {key: (version if isinstance(value, bool) else value)
+                    for key, value in conversions.items()
+                    if key in cls.object_types}
+        
+        return {key: version for key in conversions if key in cls.object_types}
+    
+    @classmethod
+    def parse_modes(cls, modes):
+        result = []
+        
+        for mode_info in modes:
+            if isinstance(mode_info, dict):
+                mode_info = ObjectModeInfo(**mode_info)
+            elif not isinstance(mode_info, ObjectModeInfo):
+                mode_info = ObjectModeInfo(*mode_info)
+            
+            if mode_info: result.append(mode_info)
+        
+        return result
+
 class BlEnums:
     extensible_classes = (bpy.types.PropertyGroup, bpy.types.ID, bpy.types.Bone, bpy.types.PoseBone) # see bpy_struct documentation
     
@@ -1233,92 +1293,109 @@ class BlEnums:
         'bl_width_default', 'bl_width_max', 'bl_width_min',
         'bl_height_default', 'bl_height_max', 'bl_height_min'}
     
-    options = {tn:{item.identifier for item in getattr(bpy.types, tn).bl_rna.properties["bl_options"].enum_items}
-        for tn in ("KeyingSet", "KeyingSetInfo", "KeyingSetPath", "Macro", "Operator", "Panel")
-        if "bl_options" in getattr(bpy.types, tn).bl_rna.properties} # Since 2.73a, KeyingSet and KeyingSetPath don't have bl_options
+    options = {type_name: {item.identifier for item in getattr(bpy.types, type_name).bl_rna.properties["bl_options"].enum_items}
+        for type_name in ("GizmoGroup", "KeyingSetInfo", "Macro", "Operator", "Panel")
+        if "bl_options" in getattr(bpy.types, type_name).bl_rna.properties}
     
     space_types = {item.identifier for item in bpy.types.Space.bl_rna.properties["type"].enum_items}
     region_types = {item.identifier for item in bpy.types.Region.bl_rna.properties["type"].enum_items}
     
-    modes = {item.identifier for item in bpy.types.Context.bl_rna.properties["mode"].enum_items}
-    paint_sculpt_modes = {'SCULPT', 'VERTEX_PAINT', 'PAINT_VERTEX',
-        'WEIGHT_PAINT', 'PAINT_WEIGHT', 'TEXTURE_PAINT', 'PAINT_TEXTURE'}
+    context_modes = ObjectModeInfo.context_modes
+    object_modes = ObjectModeInfo.object_modes
+    object_types = ObjectTypeInfo.object_types
     
-    object_modes = {item.identifier for item in bpy.types.Object.bl_rna.properties["mode"].enum_items}
-    object_types = {item.identifier for item in bpy.types.Object.bl_rna.properties["type"].enum_items}
-    object_types_editable = {'MESH', 'CURVE', 'SURFACE', 'META', 'FONT', 'ARMATURE', 'LATTICE', 'GPENCIL'}
-    object_types_geometry = {'MESH', 'CURVE', 'SURFACE', 'META', 'FONT'}
-    object_types_with_modifiers = {'MESH', 'CURVE', 'SURFACE', 'FONT', 'LATTICE', 'GPENCIL'}
-    object_types_with_vertices = {'MESH', 'CURVE', 'SURFACE', 'LATTICE', 'GPENCIL'}
+    object_infos = [
+        ObjectTypeInfo('MESH', "Mesh", {'RENDERABLE':True, 'MODIFIERS':True}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('EDIT_MESH', 'EDIT', 'EDIT', 'MESH'),
+            ('SCULPT', 'SCULPT', 'SCULPT'),
+            ('PAINT_WEIGHT', 'WEIGHT_PAINT', 'PAINT', 'WEIGHT'),
+            ('PAINT_VERTEX', 'VERTEX_PAINT', 'PAINT', 'VERTEX'),
+            ('PAINT_TEXTURE', 'TEXTURE_PAINT', 'PAINT', 'TEXTURE'),
+            ('PARTICLE', 'PARTICLE_EDIT', 'EDIT', 'PARTICLE'),
+        ], {'MESH':True, 'GPENCIL':True, 'POINTCLOUD':True}),
+        ObjectTypeInfo('CURVE', "Curve", {'RENDERABLE':True, 'MODIFIERS':True}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('EDIT_CURVE', 'EDIT', 'EDIT', 'CURVE'),
+        ], {'MESH':True, 'GPENCIL':True}),
+        ObjectTypeInfo('SURFACE', "SurfaceCurve", {'RENDERABLE':True, 'MODIFIERS':True}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('EDIT_SURFACE', 'EDIT', 'EDIT', 'SURFACE'),
+        ], {'MESH':True}),
+        ObjectTypeInfo('META', "MetaBall", {'RENDERABLE':True}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('EDIT_METABALL', 'EDIT', 'EDIT', 'META'),
+        ], {'MESH':True}),
+        ObjectTypeInfo('FONT', "TextCurve", {'RENDERABLE':True, 'MODIFIERS':True}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('EDIT_TEXT', 'EDIT', 'EDIT', 'FONT'),
+        ], {'MESH':True, 'CURVE':True}),
+        # HAIR? it is mentioned among Object.type enum values, but doesn't seem to be implemented so far
+        ObjectTypeInfo('POINTCLOUD', "PointCloud", {'RENDERABLE':True, 'MODIFIERS':True}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+        ], {'MESH':True}),
+        ObjectTypeInfo('VOLUME', "Volume", {'RENDERABLE':True, 'MODIFIERS':True}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+        ]),
+        ObjectTypeInfo('GPENCIL', "GreasePencil", {'RENDERABLE':True, 'MODIFIERS':True}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('PAINT_GPENCIL', 'PAINT_GPENCIL', 'DRAW'),
+            ('EDIT_GPENCIL', 'EDIT_GPENCIL', 'EDIT', 'GPENCIL'),
+            ('SCULPT_GPENCIL', 'SCULPT_GPENCIL', 'SCULPT'),
+            ('WEIGHT_GPENCIL', 'WEIGHT_GPENCIL', 'PAINT', 'WEIGHT'),
+            ('VERTEX_GPENCIL', 'VERTEX_GPENCIL', 'PAINT', 'VERTEX'),
+        ]),
+        ObjectTypeInfo('ARMATURE', "Armature", {}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('EDIT_ARMATURE', 'EDIT', 'EDIT', 'ARMATURE'),
+            ('POSE', 'POSE', 'POSE'),
+        ]),
+        ObjectTypeInfo('LATTICE', "Lattice", {'MODIFIERS':True}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('EDIT_LATTICE', 'EDIT', 'EDIT', 'LATTICE'),
+        ]),
+        ObjectTypeInfo('EMPTY', None, {'RENDERABLE':True}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+        ]),
+        ObjectTypeInfo('LIGHT', "Light", {'RENDERABLE':True}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+        ]),
+        ObjectTypeInfo('LIGHT_PROBE', "LightProbe", {'RENDERABLE':True}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+        ]),
+        ObjectTypeInfo('CAMERA', "Camera", {'RENDERABLE':True}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+        ]),
+        ObjectTypeInfo('SPEAKER', "Speaker", {'RENDERABLE':True}, [
+            ('OBJECT', 'OBJECT', 'OBJECT'),
+        ]),
+    ]
+    # For some reason, python considers object_types to not be defined in the scope of this dict comprehension
+    object_infos = {obj_info.name: obj_info for obj_info in object_infos if obj_info.name in ObjectTypeInfo.object_types}
+    mode_infos = {mode.context: mode for obj_info in object_infos.values() for mode in obj_info.modes}
     
-    object_mode_support = {
-        'MESH':{'OBJECT', 'EDIT', 'SCULPT', 'VERTEX_PAINT', 'WEIGHT_PAINT', 'TEXTURE_PAINT', 'PARTICLE_EDIT',
-            'EDIT_MESH', 'PAINT_WEIGHT', 'PAINT_VERTEX', 'PAINT_TEXTURE', 'PARTICLE'},
-        'CURVE':{'OBJECT', 'EDIT', 'EDIT_CURVE'},
-        'SURFACE':{'OBJECT', 'EDIT', 'EDIT_SURFACE'},
-        'META':{'OBJECT', 'EDIT', 'EDIT_METABALL'},
-        'FONT':{'OBJECT', 'EDIT', 'EDIT_TEXT'},
-        'ARMATURE':{'OBJECT', 'EDIT', 'POSE', 'EDIT_ARMATURE'},
-        'LATTICE':{'OBJECT', 'EDIT', 'EDIT_LATTICE'},
-        'GPENCIL':{'OBJECT', 'PAINT_GPENCIL', 'EDIT_GPENCIL', 'SCULPT_GPENCIL', 'WEIGHT_GPENCIL'},
-        'EMPTY':{'OBJECT'},
-        'CAMERA':{'OBJECT'},
-        'LIGHT':{'OBJECT'},
-        'LIGHT_PROBE':{'OBJECT'},
-        'SPEAKER':{'OBJECT'},
-    }
-    mode_object_support = {
-        'OBJECT':object_types,
-        'EDIT':object_types_editable,
-        'POSE':{'ARMATURE'},
-        'SCULPT':{'MESH'},
-        'VERTEX_PAINT':{'MESH'},
-        'PAINT_VERTEX':{'MESH'},
-        'WEIGHT_PAINT':{'MESH'},
-        'PAINT_WEIGHT':{'MESH'},
-        'TEXTURE_PAINT':{'MESH'},
-        'PAINT_TEXTURE':{'MESH'},
-        'PARTICLE_EDIT':{'MESH'},
-        'PARTICLE':{'MESH'},
-        'EDIT_MESH':{'MESH'},
-        'EDIT_CURVE':{'CURVE'},
-        'EDIT_SURFACE':{'SURFACE'},
-        'EDIT_TEXT':{'FONT'},
-        'EDIT_ARMATURE':{'ARMATURE'},
-        'EDIT_METABALL':{'META'},
-        'EDIT_LATTICE':{'LATTICE'},
-        'PAINT_GPENCIL':{'GPENCIL'},
-        'EDIT_GPENCIL':{'GPENCIL'},
-        'SCULPT_GPENCIL':{'GPENCIL'},
-        'WEIGHT_GPENCIL':{'GPENCIL'},
-    },
-    
-    __generic_mode_map = {'OBJECT':'OBJECT', 'POSE':'POSE', 'SCULPT':'SCULPT', 'VERTEX_PAINT':'PAINT_VERTEX',
-        'WEIGHT_PAINT':'PAINT_WEIGHT', 'TEXTURE_PAINT':'PAINT_TEXTURE', 'PARTICLE_EDIT':'PARTICLE'}
-    __edit_mode_map = {'MESH':'EDIT_MESH', 'CURVE':'EDIT_CURVE', 'SURFACE':'EDIT_SURFACE',
-        'META':'EDIT_METABALL', 'FONT':'EDIT_TEXT', 'ARMATURE':'EDIT_ARMATURE', 'LATTICE':'EDIT_LATTICE'}
     @classmethod
     def mode_from_object(cls, obj):
         if not obj: return 'OBJECT'
-        return cls.__generic_mode_map.get(obj.mode) or cls.__edit_mode_map.get(obj.type)
+        return cls.object_infos[obj.type].object_modes[obj.mode].context
     
-    __mode_to_obj_map = {'EDIT_MESH':'EDIT', 'EDIT_CURVE':'EDIT', 'EDIT_SURFACE':'EDIT', 'EDIT_TEXT':'EDIT',
-        'EDIT_ARMATURE':'EDIT', 'EDIT_METABALL':'EDIT', 'EDIT_LATTICE':'EDIT', 'POSE':'POSE', 'SCULPT':'SCULPT',
-        'PAINT_WEIGHT':'WEIGHT_PAINT', 'PAINT_VERTEX':'VERTEX_PAINT', 'PAINT_TEXTURE':'TEXTURE_PAINT',
-        'PARTICLE':'PARTICLE_EDIT', 'OBJECT':'OBJECT'}
     @classmethod
     def mode_to_object(cls, context_mode):
-        return cls.__mode_to_obj_map.get(context_mode)
+        mode = cls.mode_infos.get(context_mode)
+        return (mode.object if mode else None)
     
     @classmethod
     def normalize_mode(cls, mode, obj=None):
-        if mode in cls.modes: return mode
-        if mode == 'EDIT': return (cls.__edit_mode_map.get(obj.type) if obj else None)
-        return cls.__generic_mode_map.get(mode)
+        if mode in cls.context_modes: return mode
+        if not obj: return None
+        mode = cls.object_infos[obj.type].object_modes.get(obj.mode)
+        return (mode.context if mode else None)
     
     @classmethod
-    def is_mode_valid(cls, mode, obj=None):
-        return (mode in cls.object_mode_support[obj.type] if obj else mode == 'OBJECT')
+    def is_mode_valid(cls, mode, obj):
+        if not obj: return mode == 'OBJECT'
+        object_info = cls.object_infos[obj.type]
+        return (mode in object_info.object_modes) or (mode in object_info.context_modes)
     
     @classmethod
     def get_mode_name(cls, mode):

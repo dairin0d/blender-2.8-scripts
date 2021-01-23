@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 4, 1),
+    "version": (1, 4, 2),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -1574,7 +1574,7 @@ class ThisAddonPreferences:
     
     auto_trackball: False | prop("Auto Trackball/Turntable", "Enable automatic switching between Trackball and Turntable in certain object modes")
     auto_trackball_modes: {} | prop("Auto Trackball modes", "In which object modes to use Trackball",
-        items=[(mode_name, BlEnums.get_mode_name(mode_name), "") for mode_name in sorted(BlEnums.modes)])
+        items=[(mode_name, BlEnums.get_mode_name(mode_name), "") for mode_name in sorted(BlEnums.context_modes)])
     
     def draw(self, context):
         layout = self.layout
