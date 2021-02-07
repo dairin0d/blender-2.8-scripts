@@ -405,10 +405,9 @@ class BlRna:
             if len(valueA) != len(valueB): return False
             return all(BlRna.compare(valueA[i], valueB[i]) for i in range(len(valueA)))
         else: # primitive types or enum
-            if hasattr(rna_prop, "array_length"):
-                if rna_prop.array_length != 0:
-                    if not isinstance(valueA, Matrix):
-                        return tuple(valueA) == tuple(valueB)
+            if hasattr(rna_prop, "array_length") and not isinstance(valueA, (Matrix, str)):
+                if (rna_prop.array_length != 0) or hasattr(valueA, "__len__"):
+                    return (len(valueA) == len(valueB)) and (tuple(valueA) == tuple(valueB))
             return valueA == valueB
     
     @staticmethod
