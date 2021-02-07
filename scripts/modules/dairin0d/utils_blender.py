@@ -846,6 +846,7 @@ class BlUtil:
         def all_children(coll, result=None):
             if result is None: result = set()
             for child_coll in coll.children:
+                result.add(child_coll)
                 BlUtil.Collection.all_children(child_coll, result)
             return result
         
