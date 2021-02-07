@@ -1524,6 +1524,13 @@ class NodeTreeComparer:
     @classmethod
     def nodetree_key(cls, nodetree):
         return frozenset(cls.node_key(node) for node in nodetree.nodes)
+    
+    @classmethod
+    def compare(cls, treeA, treeB):
+        if (treeA is None) and (treeB is None): return True
+        if (treeA is None) or (treeB is None): return False
+        if not BlRna.compare(treeA.animation_data, treeB.animation_data): return False
+        return cls.nodetree_key(treeA) == cls.nodetree_key(treeB)
 
 # =========================================================================== #
 
