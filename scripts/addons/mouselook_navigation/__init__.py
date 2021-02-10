@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 5, 0),
+    "version": (1, 5, 1),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -900,10 +900,23 @@ class MouselookNavigation:
         mouse_region = mouse - region_pos
         mouse_clickable_region = mouse - clickable_region_pos
         
+        self.zoom_to_selection = settings.zoom_to_selection
+        self.force_origin_mouse = self.keys_origin_mouse()
+        self.force_origin_selection = self.keys_origin_selection()
+        self.use_origin_mouse = userprefs.inputs.use_mouse_depth_navigate
+        self.use_origin_selection = userprefs.inputs.use_rotate_around_active
+        if self.force_origin_selection:
+            self.use_origin_selection = True
+            self.use_origin_mouse = False
+        elif self.force_origin_mouse:
+            self.use_origin_selection = False
+            self.use_origin_mouse = True
+        
         is_sculpt = (context.mode == 'SCULPT')
         is_dyntopo = False
         
-        use_raycast = self.use_origin_mouse or (self.zbrush_mode != 'NONE')
+        ignore_raycast = context.mode not in settings.raycast_modes
+        use_raycast = (not ignore_raycast) and (self.use_origin_mouse or (self.zbrush_mode != 'NONE'))
         
         # If a mesh has face data, Blender will automatically disable dyntopo on re-entering sculpt mode
         if is_sculpt and use_raycast:
@@ -922,18 +935,6 @@ class MouselookNavigation:
             elif settings.zbrush_method == 'RAYCAST':
                 with ToggleObjectMode('OBJECT' if is_sculpt else None):
                     cast_result = self.sv.ray_cast(mouse_region, raycast_radius)
-        
-        self.zoom_to_selection = settings.zoom_to_selection
-        self.force_origin_mouse = self.keys_origin_mouse()
-        self.force_origin_selection = self.keys_origin_selection()
-        self.use_origin_mouse = userprefs.inputs.use_mouse_depth_navigate
-        self.use_origin_selection = userprefs.inputs.use_rotate_around_active
-        if self.force_origin_selection:
-            self.use_origin_selection = True
-            self.use_origin_mouse = False
-        elif self.force_origin_mouse:
-            self.use_origin_selection = False
-            self.use_origin_mouse = True
         
         self.explicit_orbit_origin = None
         if self.use_origin_selection:
@@ -961,11 +962,11 @@ class MouselookNavigation:
                 wrk_pos = min(wrk_x, wrk_y)
                 
                 if wrk_pos > self.zbrush_border:
-                    if settings.zbrush_method == 'SELECTION':
+                    if use_raycast and (settings.zbrush_method == 'SELECTION'):
                         with ToggleObjectMode('OBJECT' if is_sculpt else None):
                             cast_result = self.sv.select(mouse_region)
                     
-                    if cast_result.success:
+                    if cast_result.success or ignore_raycast:
                         if is_dyntopo: bpy.ops.sculpt.dynamic_topology_toggle()
                         return {'PASS_THROUGH'}
             
@@ -1534,6 +1535,12 @@ class ThisAddonPreferences:
     
     animation_fps: 50.0 | prop("Animation timer FPS", "Animation timer FPS")
     
+    raycast_modes = BlEnums.context_modes | prop("Raycast modes",
+        "Object modes in which raycasting/selection is enabled\n"+
+        "(e.g. you might want to disable raycasting for Sculpt mode, "+
+        "because there raycasting is slow for high-detail meshes)",
+        items=[(mode_info.context, mode_info.name, mode_info.name) for mode_info in BlEnums.mode_infos.values()])
+    
     show_crosshair: True | prop("Show Crosshair", "Crosshair visibility")
     show_focus: True | prop("Show Orbit Center", "Orbit Center visibility")
     show_zbrush_border: True | prop("Show ZBrush border", "ZBrush border visibility")
@@ -1648,14 +1655,19 @@ class ThisAddonPreferences:
                 layout.prop(self, "animation_fps", text="FPS")
             
             with layout.row():
+                layout.prop(self, "zbrush_radius")
+                layout.prop_menu_enum(self, "zbrush_method")
+                layout.prop_menu_enum(self, "raycast_modes")
+            
+            with layout.row():
                 with layout.column():
-                    layout.prop(self, "zbrush_radius")
+                    layout.label(text="")
                     layout.prop(self, "show_zbrush_border")
                     layout.prop(self, "show_crosshair")
                     layout.prop(self, "show_focus")
                 with layout.column():
                     with layout.row():
-                        layout.prop_menu_enum(self, "zbrush_method")
+                        layout.label(text="")
                         layout.prop(self, "use_blender_colors")
                     with layout.column()(active=not self.use_blender_colors):
                         layout.row().prop(self, "color_zbrush_border")
