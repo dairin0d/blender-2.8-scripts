@@ -1281,6 +1281,10 @@ class ObjectTypeInfo:
             if mode_info: result.append(mode_info)
         
         return result
+    
+    def is_convertible(self, obj_type):
+        blender_version = self.conversions.get(obj_type)
+        return (False if blender_version is None else bpy.app.version >= blender_version)
 
 class BlEnums:
     extensible_classes = (bpy.types.PropertyGroup, bpy.types.ID, bpy.types.Bone, bpy.types.PoseBone) # see bpy_struct documentation
@@ -1400,6 +1404,12 @@ class BlEnums:
     def get_mode_name(cls, mode):
         mode = mode.replace("GPENCIL", "GREASE_PENCIL")
         return " ".join([word.capitalize() for word in mode.split("_")])
+    
+    @classmethod
+    def is_convertible(cls, src_type, dst_type):
+        src_info = cls.object_infos.get(src_type)
+        dst_info = cls.object_infos.get(dst_type)
+        return (src_info.is_convertible(dst_info.name) if src_info and dst_info else False)
     
     # Panel.bl_context is not an enum property, so we can't get all possible values through introspection
     panel_contexts = {
