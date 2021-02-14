@@ -766,7 +766,7 @@ class BlUtil:
             return [v for k, v in BlUtil.Data.all_iter(non_removable, exclude)]
         
         @staticmethod
-        def get_users_map(bpy_datas):
+        def get_users_map(bpy_datas, use_fake_user=True):
             if hasattr(bpy_datas, "values"): bpy_datas = bpy_datas.values() # dict
             
             users_map = {}
@@ -775,19 +775,15 @@ class BlUtil:
                 if isinstance(bpy_data, tuple): bpy_data = bpy_data[1] # all_iter()
                 
                 for item in bpy_data:
-                    users_map[(bpy_data, item)] = item.users
+                    users = item.users
+                    if not use_fake_user: users -= int(item.use_fake_user)
+                    users_map[(bpy_data, item)] = users
             
             return users_map
         
         @staticmethod
-        def clear_orphaned(users_map0, users_map1):
-            modified = False
-            
-            for key, users0 in users_map0.items():
-                users1 = users_map1.get(key, 0)
-                if users0 == users1: continue
-                if users1 > 0: continue
-                
+        def clear_orphaned(users_map0, users_map1, check='OLD'):
+            def remove(users_map1, key):
                 bpy_data, item = key
                 
                 try:
@@ -796,27 +792,54 @@ class BlUtil:
                     pass
                 
                 users_map1.pop(key, None)
-                
-                modified = True
+            
+            modified = False
+            
+            if check == 'OLD':
+                check_old = True
+                check_new = False
+            elif check == 'NEW':
+                check_old = False
+                check_new = True
+            else:
+                check_old = True
+                check_new = True
+            
+            if check_old:
+                # If object had users, but now doesn't, remove it
+                for key, users0 in users_map0.items():
+                    users1 = users_map1.get(key, 0)
+                    if (users1 > 0) or (users0 == users1): continue
+                    remove(users_map1, key)
+                    modified = True
+            
+            if check_new:
+                # If object has no users and wasn't present before, remove it
+                for key, users1 in tuple(users_map1.items()):
+                    if (users1 > 0) or (key in users_map0): continue
+                    remove(users_map1, key)
+                    modified = True
             
             return modified
         
         class OrphanCleanup:
-            def __init__(self, exclude=()):
+            def __init__(self, exclude=(), use_fake_user=True, check='OLD'):
                 self.exclude = exclude
+                self.use_fake_user = use_fake_user
+                self.check = check
             
             def __enter__(self):
                 self.bpy_datas = BlUtil.Data.all_list(False, exclude=self.exclude)
-                self.users_map0 = BlUtil.Data.get_users_map(self.bpy_datas)
+                self.users_map0 = BlUtil.Data.get_users_map(self.bpy_datas, self.use_fake_user)
             
             def __exit__(self, exc_type, exc_value, exc_traceback):
                 bpy_datas = self.bpy_datas
                 users_map0 = self.users_map0
-                users_map1 = BlUtil.Data.get_users_map(bpy_datas)
+                users_map1 = BlUtil.Data.get_users_map(bpy_datas, self.use_fake_user)
                 
-                while BlUtil.Data.clear_orphaned(users_map0, users_map1):
+                while BlUtil.Data.clear_orphaned(users_map0, users_map1, self.check):
                     users_map0 = users_map1
-                    users_map1 = BlUtil.Data.get_users_map(bpy_datas)
+                    users_map1 = BlUtil.Data.get_users_map(bpy_datas, self.use_fake_user)
     
     class Collection:
         @staticmethod
