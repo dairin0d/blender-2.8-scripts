@@ -889,7 +889,7 @@ class MouselookNavigation:
         region_pos, region_size = self.sv.region_rect().get("min", "size", convert=Vector)
         clickable_region_pos, clickable_region_size = self.sv.region_rect(False).get("min", "size", convert=Vector)
         
-        self.zbrush_border = calc_zbrush_border(self.sv.area, self.sv.region)
+        self.zbrush_border = calc_zbrush_border(self.sv.area, self.sv.region, settings.zbrush_border_scale*0.01, settings.zbrush_border_min)
         
         self.km = InputKeyMonitor(event)
         self.create_keycheckers(event, input_settings)
@@ -1170,7 +1170,7 @@ def draw_callback_px(self, context):
         
         full_rect = BlUI.calc_region_rect(area, region)
         clickable_rect = BlUI.calc_region_rect(area, region, False)
-        border = calc_zbrush_border(area, region)
+        border = calc_zbrush_border(area, region, settings.zbrush_border_scale*0.01, settings.zbrush_border_min)
         color = settings.get_color("color_zbrush_border")
         
         x, y = clickable_rect.min - full_rect.min
@@ -1546,6 +1546,9 @@ class ThisAddonPreferences:
     color_crosshair_visible: Color() | prop("Crosshair (visible)", "Crosshair (visible) color")
     color_crosshair_obscured: Color() | prop("Crosshair (obscured)", "Crosshair (obscured) color")
     color_zbrush_border: Color() | prop("ZBrush border", "ZBrush border color")
+    zbrush_border_scale: 5.0 | prop("ZBrush border scale", "Size of ZBrush border (relative to viewport size)",
+        min=0.0, max=25.0, precision=1, subtype='PERCENTAGE')
+    zbrush_border_min: 16 | prop("ZBrush border min size", "Minimal size of ZBrush border (in pixels)", min=0, subtype='PIXEL')
     
     def get_color(self, attr_name):
         if self.use_blender_colors:
@@ -1660,13 +1663,13 @@ class ThisAddonPreferences:
             
             with layout.row():
                 with layout.column():
-                    layout.label(text="")
+                    layout.prop(self, "zbrush_border_scale", text="Border Scale", slider=True)
                     layout.prop(self, "show_zbrush_border")
                     layout.prop(self, "show_crosshair")
                     layout.prop(self, "show_focus")
                 with layout.column():
                     with layout.row():
-                        layout.label(text="")
+                        layout.prop(self, "zbrush_border_min", text="Border Min")
                         layout.prop(self, "use_blender_colors")
                     with layout.column()(active=not self.use_blender_colors):
                         layout.row().prop(self, "color_zbrush_border")
