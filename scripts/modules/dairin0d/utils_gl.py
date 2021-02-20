@@ -604,6 +604,15 @@ def initialize():
             glDepthRange(float(value[0]), float(value[1]))
         add_descriptor("DepthRange", _get, _set)
     
+    if hasattr(bgl, "glColorMask"):
+        from bgl import GL_COLOR_WRITEMASK, glColorMask
+        def _get(self, instance, owner):
+            glGetIntegerv(GL_COLOR_WRITEMASK, int4buf0)
+            return bool(int4buf0[0]), bool(int4buf0[1]), bool(int4buf0[2]), bool(int4buf0[3])
+        def _set(self, instance, value):
+            glColorMask(*(GL_TRUE if item else GL_FALSE for item in value))
+        add_descriptor("ColorMask", _get, _set)
+    
     if hasattr(bgl, "glPolygonOffset"):
         from bgl import GL_POLYGON_OFFSET_FACTOR, GL_POLYGON_OFFSET_UNITS, glPolygonOffset
         PolygonOffset = namedtuple("PolygonOffset", ("factor", "units"))
