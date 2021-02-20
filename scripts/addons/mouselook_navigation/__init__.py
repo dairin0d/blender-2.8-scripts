@@ -166,8 +166,8 @@ class MouselookNavigation_InputSettings:
         ('ALWAYS', "ZBrush mode: Always", "Always use ZBrush behavior"),
     ])
     
-    def _keyprop(name, default_keys):
-        return default_keys | prop(name, name)
+    def _keyprop(name, default_keys, tooltip=""):
+        return default_keys | prop(name, tooltip or name)
     keys_confirm: _keyprop("Confirm", "Ret, Numpad Enter, Left Mouse: Press")
     keys_cancel: _keyprop("Cancel", "Esc, Right Mouse: Press")
     keys_rotmode_switch: _keyprop("Trackball on/off", "Space: Press")
@@ -191,6 +191,8 @@ class MouselookNavigation_InputSettings:
     keys_fps_crouch: _keyprop("FPS crouch", "Ctrl")
     keys_fps_jump: _keyprop("FPS jump", "Space")
     keys_fps_teleport: _keyprop("FPS teleport", "{Invoke key}, V")
+    keys_x_only: _keyprop("X only", "X: Press", tooltip="Toggle X-axis input")
+    keys_y_only: _keyprop("Y only", "Y: Press", tooltip="Toggle Y-axis input")
     
     def draw(self, layout):
         with layout.split(factor=0.15):
@@ -218,6 +220,8 @@ class MouselookNavigation_InputSettings:
                         layout.prop(self, "keys_zoom")
                         layout.prop(self, "keys_fly")
                         layout.prop(self, "keys_fps")
+                        layout.separator()
+                        layout.prop(self, "keys_x_only")
                     with layout.column():
                         layout.prop(self, "keys_confirm")
                         layout.prop(self, "keys_cancel")
@@ -233,6 +237,8 @@ class MouselookNavigation_InputSettings:
                         layout.prop(self, "keys_fps_crouch")
                         layout.prop(self, "keys_fps_jump")
                         layout.prop(self, "keys_fps_teleport")
+                        layout.separator()
+                        layout.prop(self, "keys_y_only")
 
 @addon.Operator(idname="mouselook_navigation.navigate", label="Mouselook navigation", description="Mouselook navigation", options={'GRAB_CURSOR', 'BLOCKING'})
 class MouselookNavigation:
@@ -274,6 +280,8 @@ class MouselookNavigation:
         self.keys_fps_crouch = self.km.keychecker(input_settings.keys_fps_crouch)
         self.keys_fps_jump = self.km.keychecker(input_settings.keys_fps_jump)
         self.keys_fps_teleport = self.km.keychecker(input_settings.keys_fps_teleport)
+        self.keys_x_only = self.km.keychecker(input_settings.keys_x_only)
+        self.keys_y_only = self.km.keychecker(input_settings.keys_y_only)
     
     @classmethod
     def poll(cls, context):
@@ -330,6 +338,12 @@ class MouselookNavigation:
         mouse_offset = mouse - self.mouse0
         mouse_delta = mouse - mouse_prev
         mouse_region = mouse - region_pos
+        
+        if self.keys_x_only(): self.input_axis_mode = ('X' if self.input_axis_mode != 'X' else 'XY')
+        if self.keys_y_only(): self.input_axis_mode = ('Y' if self.input_axis_mode != 'Y' else 'XY')
+        
+        if 'X' not in self.input_axis_mode: mouse_delta[0] = 0.0
+        if 'Y' not in self.input_axis_mode: mouse_delta[1] = 0.0
         
         if self.independent_modes and (mode != prev_mode) and (mode not in {'FLY', 'FPS'}):
             mode_state = self.modes_state[mode]
@@ -898,6 +912,8 @@ class MouselookNavigation:
         mouse_delta = mouse - mouse_prev
         mouse_region = mouse - region_pos
         mouse_clickable_region = mouse - clickable_region_pos
+        
+        self.input_axis_mode = 'XY'
         
         self.zoom_to_selection = settings.zoom_to_selection
         self.force_origin_mouse = self.keys_origin_mouse()
