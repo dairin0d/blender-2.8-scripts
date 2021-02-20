@@ -257,9 +257,15 @@ class SmartView3D:
     lock_camera = property(__get, __set)
     
     def __get(self):
-        return self.userprefs.inputs.use_camera_lock_parent
+        if hasattr(self.userprefs.inputs, "use_camera_lock_parent"):
+            return self.userprefs.inputs.use_camera_lock_parent
+        else: # Blender 2.92 release candidate and later versions
+            return (self.camera.use_camera_lock_parent if self.camera else False)
     def __set(self, value):
-        self.userprefs.inputs.use_camera_lock_parent = value
+        if hasattr(self.userprefs.inputs, "use_camera_lock_parent"):
+            self.userprefs.inputs.use_camera_lock_parent = value
+        else: # Blender 2.92 release candidate and later versions
+            if self.camera: self.camera.use_camera_lock_parent = value
     lock_camera_parent = property(__get, __set)
     
     def __get(self):
@@ -453,9 +459,6 @@ class SmartView3D:
         else:
             rv3d.view_rotation = rotation
         if self.force_update: rv3d.update()
-    
-    # self.force_update = kwargs.get("force_update", False)
-    # self.use_matrix = kwargs.get("use_matrix", False)
     
     def __cam_set_matrix(self, m):
         cam = self.space_data.camera
