@@ -1262,7 +1262,7 @@ def update_keymaps(activate=True):
         if len(settings.autoreg_keymaps) == 0 and settings.use_default_keymap:
             # Since Blender 2.91, there are multiple view3d.rotate keymaps
             default_keys = {kmi.type for kc, km, kmi in KeyMapUtils.search("view3d.rotate")}
-            for default_key in sorted(default_keys):
+            for i, default_key in enumerate(sorted(default_keys)):
                 ark = settings.autoreg_keymaps.add()
                 ark.keymaps = {'3D View'}
                 ark.value_type = default_key+":"+"ANY"
@@ -1272,6 +1272,7 @@ def update_keymaps(activate=True):
                 ark.alt = False
                 ark.oskey = False
                 ark.key_modifier = ""
+                ark.index = i
         
         kmi_to_insert = {}
         
