@@ -946,7 +946,7 @@ class MouselookNavigation:
         if use_raycast:
             # Note: Auto Depth is useless with ZBrush mode anyway
             if settings.zbrush_method == 'ZBUFFER':
-                cast_result = self.sv.depth_cast(mouse_region, depthcast_radius)
+                cast_result = self.depth_cast(context, mouse_region, depthcast_radius)
             elif settings.zbrush_method == 'RAYCAST':
                 with ToggleObjectMode('OBJECT' if is_sculpt else None):
                     cast_result = self.sv.ray_cast(mouse_region, raycast_radius)
@@ -1072,6 +1072,58 @@ class MouselookNavigation:
         context.area.tag_redraw()
         
         return {'RUNNING_MODAL'}
+    
+    def depth_cast(self, context, mouse_region, depthcast_radius):
+        result = {}
+        
+        def draw_callback():
+            cast_result = self.sv.depth_cast(mouse_region, depthcast_radius, coords='WINDOW')
+            result["cast_result"] = cast_result
+        
+        context = bpy.context
+        view3d = context.space_data
+        prefs_system = context.preferences.system
+        
+        # Important: if viewport_aa is not OFF, 1-frame artifacts may appear after bpy.ops.wm.redraw_timer()
+        
+        viewport_aa = prefs_system.viewport_aa
+        show_relationship_lines = view3d.overlay.show_relationship_lines
+        show_motion_paths = view3d.overlay.show_motion_paths
+        show_reconstruction = view3d.show_reconstruction
+        show_gizmo = view3d.show_gizmo
+        shading_type = view3d.shading.type
+        show_xray = view3d.shading.show_xray
+        show_shadows = view3d.shading.show_shadows
+        show_cavity = view3d.shading.show_cavity
+        use_dof = view3d.shading.use_dof
+        
+        prefs_system.viewport_aa = 'OFF'
+        view3d.overlay.show_relationship_lines = False
+        view3d.overlay.show_motion_paths = False
+        view3d.show_reconstruction = False
+        view3d.show_gizmo = False
+        view3d.shading.type = 'SOLID'
+        view3d.shading.show_xray = False
+        view3d.shading.show_shadows = False
+        view3d.shading.show_cavity = False
+        view3d.shading.use_dof = False
+        
+        handler = addon.draw_handler_add(bpy.types.SpaceView3D, draw_callback, (), 'WINDOW', 'POST_PIXEL')
+        bpy.ops.wm.redraw_timer(type='DRAW', iterations=1)
+        addon.remove(handler)
+        
+        prefs_system.viewport_aa = viewport_aa
+        view3d.overlay.show_relationship_lines = show_relationship_lines
+        view3d.overlay.show_motion_paths = show_motion_paths
+        view3d.show_reconstruction = show_reconstruction
+        view3d.show_gizmo = show_gizmo
+        view3d.shading.type = shading_type
+        view3d.shading.show_xray = show_xray
+        view3d.shading.show_shadows = show_shadows
+        view3d.shading.show_cavity = show_cavity
+        view3d.shading.use_dof = use_dof
+        
+        return result["cast_result"]
     
     def revert_changes(self):
         self.sv.bypass_camera_lock = True
@@ -1595,7 +1647,7 @@ class ThisAddonPreferences:
     zbrush_method: 'SELECTION' | prop("ZBrush method", "Which method to use to determine if mouse is over empty space", items=[
         ('RAYCAST', "Raycast"),
         ('SELECTION', "Selection"),
-        # ('ZBUFFER', "Z-buffer"),
+        ('ZBUFFER', "Z-buffer"),
     ])
     
     flips: NavigationDirectionFlip | prop()
