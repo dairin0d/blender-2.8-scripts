@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 5, 2),
+    "version": (1, 6, 0),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -66,6 +66,7 @@ from . import utils_navigation
 from .utils_navigation import trackball, apply_collisions, calc_selection_center, calc_zbrush_border
 
 addon = AddonManager()
+settings = addon.settings
 
 """
 Note: due to the use of timer, operator consumes more resources than Blender's default
@@ -304,7 +305,6 @@ class MouselookNavigation:
         use_zoom_to_mouse = userprefs.inputs.use_zoom_to_mouse
         use_auto_perspective = userprefs.inputs.use_auto_perspective
         
-        settings = addon.settings
         flips = settings.flips
         
         use_zoom_to_mouse |= self.force_origin_mouse
@@ -864,7 +864,6 @@ class MouselookNavigation:
     def invoke(self, context, event):
         wm = context.window_manager
         userprefs = context.preferences
-        settings = addon.settings
         region = context.region
         v3d = context.space_data
         rv3d = context.region_data
@@ -1038,7 +1037,7 @@ class MouselookNavigation:
         self.teleport_allowed = False
         
         self.sculpt_levels0 = None
-        if is_sculpt and context.tool_settings.sculpt.show_low_resolution:
+        if self.should_adjust_multires(context):
             for modifier in context.object.modifiers:
                 if modifier.type == 'MULTIRES':
                     self.sculpt_levels0 = modifier.sculpt_levels
@@ -1078,8 +1077,7 @@ class MouselookNavigation:
             focus_proj = self.sv.focus_projected + self.sv.region_rect().get("min", convert=Vector)
             context.window.cursor_warp(focus_proj.x, focus_proj.y)
         
-        # TODO: show_low_resolution can be enabled not only for sculpt, but for any paint-like mode
-        if (context.mode == 'SCULPT') and context.tool_settings.sculpt.show_low_resolution:
+        if self.should_adjust_multires(context):
             for modifier in context.object.modifiers:
                 if modifier.type == 'MULTIRES':
                     modifier.sculpt_levels = self.sculpt_levels0
@@ -1099,7 +1097,6 @@ class MouselookNavigation:
         context.area.tag_redraw()
     
     def register_handlers(self, context):
-        settings = addon.settings
         wm = context.window_manager
         wm.modal_handler_add(self)
         self._timer = addon.event_timer_add(1.0/settings.animation_fps, context.window)
@@ -1108,7 +1105,10 @@ class MouselookNavigation:
     def unregister_handlers(self, context):
         addon.remove(self._timer)
         addon.remove(self._handle_view)
-
+    
+    def should_adjust_multires(self, context):
+        if not settings.adjust_multires: return False
+        return (context.mode == 'SCULPT') and context.tool_settings.sculpt.show_low_resolution
 
 def draw_crosshair(self, context, use_focus):
     if not self.sv.can_move:
@@ -1163,7 +1163,6 @@ def draw_callback_view(self, context):
 def draw_callback_px(self, context):
     context = bpy.context # we need most up-to-date context
     userprefs = context.preferences
-    settings = addon.settings
     
     if settings.show_zbrush_border and settings.zbrush_mode:
         area = context.area
@@ -1188,8 +1187,6 @@ def draw_callback_px(self, context):
 
 @addon.timer(persistent=True)
 def background_timer_update():
-    settings = addon.settings
-    
     if not addon.runtime.keymaps_initialized:
         if not KeyMapUtils.exists(MouselookNavigation.bl_idname):
             # Important: we cannot do this immediately on registration,
@@ -1215,13 +1212,11 @@ def background_timer_update():
 
 @addon.Operator.execute(idname="view3d.mouselook_navigation_toggle_enabled", label="Enable/disable Mouselook Navigation")
 def VIEW3D_OT_mouselook_navigation_toggle_enabled(self, context):
-    settings = addon.settings
     settings.is_enabled = not settings.is_enabled
     BlUI.tag_redraw()
 
 @addon.Operator.execute(idname="view3d.mouselook_navigation_toggle_trackball", label="Use Trackball orbiting method")
 def VIEW3D_OT_mouselook_navigation_toggle_trackball(self, context):
-    settings = addon.settings
     settings.is_trackball = not settings.is_trackball
     BlUI.tag_redraw()
 
@@ -1235,8 +1230,6 @@ def update_keymaps(activate=True):
         # Attention: userprefs.addons[__name__] may not exist during unregistration
         context = bpy.context
         wm = context.window_manager
-        userprefs = context.preferences
-        settings = addon.settings
         
         key_monitor = InputKeyMonitor()
         #keymaps = wm.keyconfigs.addon.keymaps
@@ -1322,11 +1315,9 @@ class AutoRegKeymapInfo:
     
     def get_is_current(self):
         userprefs = bpy.context.preferences
-        settings = addon.settings
         return (settings.autoreg_keymap_id == self.index) and (not settings.use_universal_input_settings)
     def set_is_current(self, value):
         userprefs = bpy.context.preferences
-        settings = addon.settings
         if value:
             settings.autoreg_keymap_id = self.index
             settings.use_universal_input_settings = False
@@ -1340,7 +1331,6 @@ def add_autoreg_keymap(self, context):
     """Add auto-registered keymap"""
     wm = context.window_manager
     userprefs = context.preferences
-    settings = addon.settings
     settings.use_default_keymap = False
     ark = settings.autoreg_keymaps.add()
     ark.index = len(settings.autoreg_keymaps)-1
@@ -1351,7 +1341,6 @@ def remove_autoreg_keymap(self, context, index=0):
     """Remove auto-registered keymap"""
     wm = context.window_manager
     userprefs = context.preferences
-    settings = addon.settings
     settings.use_default_keymap = False
     settings.autoreg_keymaps.remove(self.index)
     if settings.autoreg_keymap_id >= len(settings.autoreg_keymaps):
@@ -1370,7 +1359,6 @@ class AutoregKeymapPreset:
         if data is None:
             wm = context.window_manager
             userprefs = context.preferences
-            settings = addon.settings
             
             data = dict(
                 flips=[flip for flip in self._flips if getattr(settings.flips, flip)],
@@ -1412,7 +1400,6 @@ class AutoregKeymapPreset:
     def apply(self, context):
         wm = context.window_manager
         userprefs = context.preferences
-        settings = addon.settings
         
         settings.use_default_keymap = False
         
@@ -1446,14 +1433,11 @@ class VIEW3D_PT_mouselook_navigation:
         return addon.settings.show_in_shelf
     
     def draw_header(self, context):
-        settings = addon.settings
         self.layout.operator("view3d.mouselook_navigation_toggle_enabled", text="",
             icon=('CHECKBOX_HLT' if settings.is_enabled else 'CHECKBOX_DEHLT'), emboss=False)
     
     def draw(self, context):
         layout = NestedLayout(self.layout)
-        
-        settings = addon.settings
         
         with layout.row():
             layout.label(text="Show/hide:")
@@ -1499,7 +1483,6 @@ class VIEW3D_PT_mouselook_navigation_header_popover:
 @addon.ui_draw("VIEW3D_HT_header", 'APPEND')
 def draw_view3d_header(self, context):
     layout = self.layout
-    settings = addon.settings
     
     if settings.show_in_header:
         row = layout.row(align=True)
@@ -1546,11 +1529,15 @@ class ThisAddonPreferences:
     
     animation_fps: 50.0 | prop("Animation timer FPS", "Animation timer FPS")
     
-    raycast_modes = BlEnums.context_modes | prop("Raycast modes",
+    raycast_modes: BlEnums.context_modes | prop("Raycast modes",
         "Object modes in which raycasting/selection is enabled\n"+
         "(e.g. you might want to disable raycasting for Sculpt mode, "+
         "because there raycasting is slow for high-detail meshes)",
         items=[(mode_info.context, mode_info.name, mode_info.name) for mode_info in BlEnums.mode_infos.values()])
+    
+    adjust_multires: True | prop("Adjust Multires", "If enabled, and the 'Fast Navigate' option "+
+        "in Blender's Sculpt menu is enabled, the sculpt resolution of Multires modifier will be"+
+        "set to 1 during the navigation. However, for high-detail meshes, this can result in lag")
     
     show_crosshair: True | prop("Show Crosshair", "Crosshair visibility")
     show_focus: True | prop("Show Orbit Center", "Orbit Center visibility")
@@ -1669,6 +1656,7 @@ class ThisAddonPreferences:
                 layout.prop(self, "zbrush_radius")
                 layout.prop_menu_enum(self, "zbrush_method")
                 layout.prop_menu_enum(self, "raycast_modes")
+                layout.prop(self, "adjust_multires")
             
             with layout.row():
                 with layout.column():
