@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 5, 1),
+    "version": (1, 5, 2),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -475,7 +475,7 @@ class MouselookNavigation:
                 self.pos = self.sv.focus
         else:
             self.sv.use_viewpoint = False
-            self.sv.bypass_camera_lock = False
+            self.sv.bypass_camera_lock = self._lock_camera
             use_gravity = False
             self.teleport_pos = None
             self.teleport_allowed = False
@@ -1000,6 +1000,13 @@ class MouselookNavigation:
         
         self.fly_speed = Vector()
         
+        # Starting from Blender 2.80, enabling the "Lock Camera to View" option
+        # makes Blender take control of the camera matrix, so manipulating the
+        # camera from scipt doesn't have any effect.
+        self._lock_camera = self.sv.lock_camera
+        self.sv.lock_camera = False
+        self.sv.bypass_camera_lock = self._lock_camera
+        
         self._clock0 = time.perf_counter()
         self._continuous0 = userprefs.inputs.use_mouse_continuous
         self._mouse0 = Vector((event.mouse_x, event.mouse_y))
@@ -1061,6 +1068,10 @@ class MouselookNavigation:
         self.mode_stack.mode = None # used for setting mouse position
     
     def cleanup(self, context):
+        # Whether the navigation was confirmed or canceled,
+        # we need to revert lock_camera to its initial state
+        self.sv.lock_camera = self._lock_camera
+        
         if self.mode_stack.mode is None:
             context.window.cursor_warp(self.mouse0.x, self.mouse0.y)
         elif self.mode_stack.mode in {'FLY', 'FPS'}:
