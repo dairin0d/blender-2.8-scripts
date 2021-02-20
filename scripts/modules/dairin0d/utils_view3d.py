@@ -757,7 +757,7 @@ class SmartView3D:
         b = region_2d_to_location_3d(region, rv3d, xy.to_2d(), far).to_3d()
         return a, b
     
-    def read_zbuffer(self, xy, wh=(1, 1), centered=False, cached=True, coords='REGION'):
+    def read_zbuffer(self, xy, wh=(1, 1), centered=False, coords='REGION'):
         xy = self.convert_ui_coord(xy, coords, 'WINDOW', False)
         return cgl.read_zbuffer(xy, wh, centered)
     
@@ -775,8 +775,8 @@ class SmartView3D:
         else:
             zbuf = (depth - near) / (far - near)
     
-    def depth(self, xy, cached=True, coords='REGION'):
-        return self.zbuf_to_depth(self.read_zbuffer(xy, cached=cached, coords=coords)[0])
+    def depth(self, xy, coords='REGION'):
+        return self.zbuf_to_depth(self.read_zbuffer(xy, coords=coords)[0])
     
     # NDC means "normalized device coordinates"
     def to_ndc(self, pos, to_01=False):
@@ -996,7 +996,7 @@ class SmartView3D:
             return RaycastResult()
     
     # success, object, matrix, location, normal
-    def depth_cast(self, xy, radius=0, pattern='RADIAL', search_z=False, cached=True, coords='REGION'):
+    def depth_cast(self, xy, radius=0, pattern='RADIAL', search_z=False, coords='REGION'):
         xy = self.convert_ui_coord(xy, coords, 'REGION', False)
         
         radius = int(radius)
@@ -1005,7 +1005,7 @@ class SmartView3D:
         sz = radius * 2 + 1 # kernel size
         w, h = sz, sz
         
-        zbuf = self.read_zbuffer(xy, (sz, sz), centered=True, cached=cached)
+        zbuf = self.read_zbuffer(xy, (sz, sz), centered=True)
         
         def get_pos(x, y):
             wnd_x = min(max(x+radius, 0), w-1)
