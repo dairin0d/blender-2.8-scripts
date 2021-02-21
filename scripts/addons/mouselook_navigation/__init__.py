@@ -155,9 +155,6 @@ class MouselookNavigation_InputSettings:
     
     default_mode: 'ORBIT' | prop("Default mode", "Default mode", items=[(mode, f"Mode: {mode}", "") for mode in modes])
     allowed_transitions: set(transitions) | prop("Transitions", "Allowed transitions between modes", items=transitions)
-    
-    ortho_unrotate: True | prop("Ortho unrotate", "In Ortho mode, rotation is abandoned if another mode is selected")
-    
     independent_modes: False | prop("Independent modes", "When switching to a different mode, use the mode's last position/rotation/zoom")
     
     zbrush_mode: 'NONE' | prop("ZBrush mode", "Invoke the operator only when mouse is over empty space or near the region border", items=[
@@ -172,6 +169,8 @@ class MouselookNavigation_InputSettings:
         ('MOUSE', "Origin: Mouse", "Orbit around the point under the mouse"),
         ('SELECTION', "Origin: Selection", "Orbit around the selection pivot"),
     ])
+    
+    ortho_unrotate: True | prop("Ortho unrotate", "In Ortho mode, rotation is abandoned if another mode is selected")
     
     def _keyprop(name, default_keys, tooltip=""):
         return default_keys | prop(name, tooltip or name)
@@ -199,93 +198,164 @@ class MouselookNavigation_InputSettings:
     keys_x_only: _keyprop("X only", "X: Press", tooltip="Toggle X-axis input")
     keys_y_only: _keyprop("Y only", "Y: Press", tooltip="Toggle Y-axis input")
     
-    def draw(self, layout):
-        with layout.row():
+    # Must be a list to preserve enum order
+    overrides_names = [
+        "default_mode",
+        "allowed_transitions",
+        "independent_modes",
+        "zbrush_mode",
+        "origin_mode",
+        "ortho_unrotate",
+        "keys_confirm",
+        "keys_cancel",
+        "keys_rotmode_switch",
+        "keys_orbit",
+        "keys_orbit_snap",
+        "keys_pan",
+        "keys_dolly",
+        "keys_zoom",
+        "keys_fly",
+        "keys_fps",
+        "keys_FPS_forward",
+        "keys_FPS_back",
+        "keys_FPS_left",
+        "keys_FPS_right",
+        "keys_FPS_up",
+        "keys_FPS_down",
+        "keys_fps_acceleration",
+        "keys_fps_slowdown",
+        "keys_fps_crouch",
+        "keys_fps_jump",
+        "keys_fps_teleport",
+        "keys_x_only",
+        "keys_y_only",
+    ]
+    overrides_names_set = set(overrides_names)
+    
+    overrides: set() | prop("Override the default value", "", items=[(name, "") for name in overrides_names])
+    
+    overrides_dummy: False | prop("Cannot override (you are currently editing the default setup)", "")
+    
+    def draw(self, layout, main):
+        is_main = main is None
+        
+        def draw_override(prop_name):
+            # UNLOCKED LOCKED UNPINNED PINNED UNLINKED LINKED
+            icon = ('PINNED' if prop_name in self.overrides else 'UNPINNED')
+            with layout.row(align=True)(enabled=(not is_main), emboss=('PULLDOWN_MENU' if is_main else 'NORMAL')):
+                if is_main:
+                    layout.prop(self, "overrides_dummy", text="", icon=icon, toggle=True)
+                else:
+                    layout.prop_enum(self, "overrides", prop_name, text="", icon=icon)
+        
+        def draw_prop(data, prop_name, **kwargs):
+            if (not is_main) and (prop_name not in self.overrides): data = main
+            layout.active = is_main or (prop_name in self.overrides)
+            layout.prop(data, prop_name, **kwargs)
+        
+        def draw_prop_with_override(data, prop_name, **kwargs):
             with layout.row(align=True):
-                layout.prop(self, "default_mode", text="")
-                layout.prop(self, "independent_modes", text="Independent", toggle=True)
-            layout.prop(self, "zbrush_mode", text="")
-            layout.prop(self, "origin_mode", text="")
-            layout.prop(self, "ortho_unrotate", toggle=True)
+                with layout.row(align=True):
+                    draw_prop(data, prop_name, **kwargs)
+                draw_override(prop_name)
         
         with layout.split(factor=0.15):
             with layout.column():
-                layout.label(text="Transitions:")
+                with layout.row():
+                    layout.label(text="Transitions:")
+                    draw_override("allowed_transitions")
                 with layout.column():
-                    layout.prop(self, "allowed_transitions")
+                    draw_prop(self, "allowed_transitions")
             
             with layout.column():
                 with layout.row():
+                    draw_prop_with_override(self, "default_mode", text="")
+                    draw_prop_with_override(self, "independent_modes", text="Independent modes", toggle=True)
+                with layout.row():
+                    draw_prop_with_override(self, "zbrush_mode", text="")
+                    draw_prop_with_override(self, "origin_mode", text="")
+                    draw_prop_with_override(self, "ortho_unrotate", toggle=True)
+                
+                layout.separator()
+                
+                with layout.row():
                     with layout.column():
                         layout.label(text="Navigation shortcuts:")
-                        layout.prop(self, "keys_confirm")
-                        layout.prop(self, "keys_cancel")
-                        layout.separator()
-                        layout.prop(self, "keys_rotmode_switch")
-                        layout.prop(self, "keys_orbit")
-                        layout.prop(self, "keys_orbit_snap")
-                        layout.prop(self, "keys_pan")
-                        layout.prop(self, "keys_dolly")
-                        layout.prop(self, "keys_zoom")
-                        layout.prop(self, "keys_fly")
-                        layout.prop(self, "keys_fps")
-                        layout.prop(self, "keys_x_only")
-                        layout.prop(self, "keys_y_only")
+                        draw_prop_with_override(self, "keys_confirm")
+                        draw_prop_with_override(self, "keys_cancel")
+                        draw_prop_with_override(self, "keys_rotmode_switch")
+                        draw_prop_with_override(self, "keys_orbit")
+                        draw_prop_with_override(self, "keys_orbit_snap")
+                        draw_prop_with_override(self, "keys_pan")
+                        draw_prop_with_override(self, "keys_dolly")
+                        draw_prop_with_override(self, "keys_zoom")
+                        draw_prop_with_override(self, "keys_fly")
+                        draw_prop_with_override(self, "keys_fps")
+                        draw_prop_with_override(self, "keys_x_only")
+                        draw_prop_with_override(self, "keys_y_only")
                     with layout.column():
                         layout.label(text="FPS mode shortcuts:")
-                        layout.prop(self, "keys_FPS_forward", text="Forward")
-                        layout.prop(self, "keys_FPS_back", text="Back")
-                        layout.prop(self, "keys_FPS_left", text="Left")
-                        layout.prop(self, "keys_FPS_right", text="Right")
-                        layout.prop(self, "keys_FPS_up", text="Up")
-                        layout.prop(self, "keys_FPS_down", text="Down")
-                        layout.prop(self, "keys_fps_acceleration", text="Faster")
-                        layout.prop(self, "keys_fps_slowdown", text="Slower")
-                        layout.prop(self, "keys_fps_crouch", text="Crouch")
-                        layout.prop(self, "keys_fps_jump", text="Jump")
-                        layout.prop(self, "keys_fps_teleport", text="Teleport")
+                        draw_prop_with_override(self, "keys_FPS_forward", text="Forward")
+                        draw_prop_with_override(self, "keys_FPS_back", text="Back")
+                        draw_prop_with_override(self, "keys_FPS_left", text="Left")
+                        draw_prop_with_override(self, "keys_FPS_right", text="Right")
+                        draw_prop_with_override(self, "keys_FPS_up", text="Up")
+                        draw_prop_with_override(self, "keys_FPS_down", text="Down")
+                        draw_prop_with_override(self, "keys_fps_acceleration", text="Faster")
+                        draw_prop_with_override(self, "keys_fps_slowdown", text="Slower")
+                        draw_prop_with_override(self, "keys_fps_crouch", text="Crouch")
+                        draw_prop_with_override(self, "keys_fps_jump", text="Jump")
+                        draw_prop_with_override(self, "keys_fps_teleport", text="Teleport")
 
 @addon.Operator(idname="mouselook_navigation.navigate", label="Mouselook navigation", description="Mouselook navigation", options={'GRAB_CURSOR', 'BLOCKING'})
 class MouselookNavigation:
     input_settings_id: 0 | prop("Input Settings ID", "Input Settings ID", min=0)
     
-    def copy_input_settings(self, input_settings):
-        self.default_mode = input_settings.default_mode
-        self.allowed_transitions = input_settings.allowed_transitions
-        self.ortho_unrotate = input_settings.ortho_unrotate
-        self.independent_modes = input_settings.independent_modes
-        self.zbrush_mode = input_settings.zbrush_mode
-        self.origin_mode = input_settings.origin_mode
+    def copy_input_settings(self, input_settings, universal_input_settings):
+        def get_value(name):
+            use_universal = (input_settings is None) or (name not in input_settings.overrides)
+            return getattr(universal_input_settings if use_universal else input_settings, name)
+        
+        self.default_mode = get_value("default_mode")
+        self.allowed_transitions = get_value("allowed_transitions")
+        self.ortho_unrotate = get_value("ortho_unrotate")
+        self.independent_modes = get_value("independent_modes")
+        self.zbrush_mode = get_value("zbrush_mode")
+        self.origin_mode = get_value("origin_mode")
     
-    def create_keycheckers(self, event, input_settings):
+    def create_keycheckers(self, event, input_settings, universal_input_settings):
+        def get_value(name):
+            use_universal = (input_settings is None) or (name not in input_settings.overrides)
+            return getattr(universal_input_settings if use_universal else input_settings, name)
+        
         self.keys_invoke = self.km.keychecker(event.type)
         if event.value in {'RELEASE', 'CLICK'}:
             self.keys_invoke_confirm = self.km.keychecker(event.type+":PRESS")
         else:
             self.keys_invoke_confirm = self.km.keychecker(event.type+":RELEASE")
-        self.keys_confirm = self.km.keychecker(input_settings.keys_confirm)
-        self.keys_cancel = self.km.keychecker(input_settings.keys_cancel)
-        self.keys_rotmode_switch = self.km.keychecker(input_settings.keys_rotmode_switch)
-        self.keys_orbit = self.km.keychecker(input_settings.keys_orbit)
-        self.keys_orbit_snap = self.km.keychecker(input_settings.keys_orbit_snap)
-        self.keys_pan = self.km.keychecker(input_settings.keys_pan)
-        self.keys_dolly = self.km.keychecker(input_settings.keys_dolly)
-        self.keys_zoom = self.km.keychecker(input_settings.keys_zoom)
-        self.keys_fly = self.km.keychecker(input_settings.keys_fly)
-        self.keys_fps = self.km.keychecker(input_settings.keys_fps)
-        self.keys_FPS_forward = self.km.keychecker(input_settings.keys_FPS_forward)
-        self.keys_FPS_back = self.km.keychecker(input_settings.keys_FPS_back)
-        self.keys_FPS_left = self.km.keychecker(input_settings.keys_FPS_left)
-        self.keys_FPS_right = self.km.keychecker(input_settings.keys_FPS_right)
-        self.keys_FPS_up = self.km.keychecker(input_settings.keys_FPS_up)
-        self.keys_FPS_down = self.km.keychecker(input_settings.keys_FPS_down)
-        self.keys_fps_acceleration = self.km.keychecker(input_settings.keys_fps_acceleration)
-        self.keys_fps_slowdown = self.km.keychecker(input_settings.keys_fps_slowdown)
-        self.keys_fps_crouch = self.km.keychecker(input_settings.keys_fps_crouch)
-        self.keys_fps_jump = self.km.keychecker(input_settings.keys_fps_jump)
-        self.keys_fps_teleport = self.km.keychecker(input_settings.keys_fps_teleport)
-        self.keys_x_only = self.km.keychecker(input_settings.keys_x_only)
-        self.keys_y_only = self.km.keychecker(input_settings.keys_y_only)
+        self.keys_confirm = self.km.keychecker(get_value("keys_confirm"))
+        self.keys_cancel = self.km.keychecker(get_value("keys_cancel"))
+        self.keys_rotmode_switch = self.km.keychecker(get_value("keys_rotmode_switch"))
+        self.keys_orbit = self.km.keychecker(get_value("keys_orbit"))
+        self.keys_orbit_snap = self.km.keychecker(get_value("keys_orbit_snap"))
+        self.keys_pan = self.km.keychecker(get_value("keys_pan"))
+        self.keys_dolly = self.km.keychecker(get_value("keys_dolly"))
+        self.keys_zoom = self.km.keychecker(get_value("keys_zoom"))
+        self.keys_fly = self.km.keychecker(get_value("keys_fly"))
+        self.keys_fps = self.km.keychecker(get_value("keys_fps"))
+        self.keys_FPS_forward = self.km.keychecker(get_value("keys_FPS_forward"))
+        self.keys_FPS_back = self.km.keychecker(get_value("keys_FPS_back"))
+        self.keys_FPS_left = self.km.keychecker(get_value("keys_FPS_left"))
+        self.keys_FPS_right = self.km.keychecker(get_value("keys_FPS_right"))
+        self.keys_FPS_up = self.km.keychecker(get_value("keys_FPS_up"))
+        self.keys_FPS_down = self.km.keychecker(get_value("keys_FPS_down"))
+        self.keys_fps_acceleration = self.km.keychecker(get_value("keys_fps_acceleration"))
+        self.keys_fps_slowdown = self.km.keychecker(get_value("keys_fps_slowdown"))
+        self.keys_fps_crouch = self.km.keychecker(get_value("keys_fps_crouch"))
+        self.keys_fps_jump = self.km.keychecker(get_value("keys_fps_jump"))
+        self.keys_fps_teleport = self.km.keychecker(get_value("keys_fps_teleport"))
+        self.keys_x_only = self.km.keychecker(get_value("keys_x_only"))
+        self.keys_y_only = self.km.keychecker(get_value("keys_y_only"))
     
     @classmethod
     def poll(cls, context):
@@ -893,14 +963,15 @@ class MouselookNavigation:
                 if (kmi.type == event.type) and (kmi.value == 'ANY'):
                     return {'CANCELLED'}
         
-        if settings.use_universal_input_settings:
-            input_settings = settings.universal_input_settings
+        if settings.is_using_universal_input_settings:
+            universal_input_settings = settings.universal_input_settings
+            input_settings = None
         else:
+            universal_input_settings = settings.universal_input_settings
             input_settings_id = min(self.input_settings_id, len(settings.autoreg_keymaps)-1)
-            autoreg_keymap = settings.autoreg_keymaps[input_settings_id]
-            input_settings = autoreg_keymap.input_settings
+            input_settings = settings.autoreg_keymaps[input_settings_id].input_settings
         
-        self.copy_input_settings(input_settings)
+        self.copy_input_settings(input_settings, universal_input_settings)
         
         self.sv = SmartView3D(context, use_matrix=True)
         
@@ -910,7 +981,7 @@ class MouselookNavigation:
         self.zbrush_border = settings.calc_zbrush_border_size(self.sv.area, self.sv.region)
         
         self.km = InputKeyMonitor(event)
-        self.create_keycheckers(event, input_settings)
+        self.create_keycheckers(event, input_settings, universal_input_settings)
         mouse_prev = Vector((event.mouse_prev_x, event.mouse_prev_y))
         mouse = Vector((event.mouse_x, event.mouse_y))
         mouse_delta = mouse - mouse_prev
@@ -1401,7 +1472,7 @@ class AutoRegKeymapInfo:
     
     def get_is_current(self):
         userprefs = bpy.context.preferences
-        return (settings.autoreg_keymap_id == self.index) and (not settings.use_universal_input_settings)
+        return (settings.autoreg_keymap_id == self.index) and (not settings.is_using_universal_input_settings)
     def set_is_current(self, value):
         userprefs = bpy.context.preferences
         if value:
@@ -1450,18 +1521,31 @@ class AutoregKeymapPreset:
             data = dict(
                 flips=[flip for flip in self._flips if getattr(settings.flips, flip)],
                 universal=settings.use_universal_input_settings,
-                settings=BlRna.serialize(settings.universal_input_settings),
-                keymaps=[self._cleanup_ark_data(BlRna.serialize(ark))
-                    for ark in settings.autoreg_keymaps],
+                settings=self._cleanup_overrides(BlRna.serialize(settings.universal_input_settings)),
+                keymaps=[self._cleanup_ark_data(BlRna.serialize(ark)) for ark in settings.autoreg_keymaps],
             )
         else:
             self._fix_old_versions(data)
         
         self.data = data
     
+    def _cleanup_overrides(self, input_settings_data):
+        input_settings_data.pop("overrides", None)
+    
     def _cleanup_ark_data(self, ark_data):
         ark_data.pop("is_current", None)
         ark_data.pop("index", None)
+        
+        input_settings_data = ark_data.get("input_settings")
+        if input_settings_data:
+            # Note: only remove non-overridden settings if overrides actually exist
+            overrides = ark_data.get("overrides")
+            if overrides is not None:
+                for key in tuple(input_settings_data.keys()):
+                    if key in overrides: continue
+                    del input_settings_data[key]
+            self._cleanup_overrides(input_settings_data)
+        
         return ark_data
     
     def _fix_zbrush_mode(self, d):
@@ -1474,7 +1558,9 @@ class AutoregKeymapPreset:
         if not isinstance(data, dict): return
         
         universal_settings = data.get("settings")
-        if universal_settings: self._fix_zbrush_mode(universal_settings)
+        if universal_settings:
+            self._cleanup_overrides(universal_settings)
+            self._fix_zbrush_mode(universal_settings)
         
         keymaps = data.get("keymaps")
         if keymaps and isinstance(keymaps, (list, tuple)):
@@ -1483,6 +1569,29 @@ class AutoregKeymapPreset:
                 self._cleanup_ark_data(keymap)
                 input_settings = keymap.get("input_settings")
                 if input_settings: self._fix_zbrush_mode(input_settings)
+    
+    def _fill_defaults(self, ark_data, universal_settings_data):
+        if not universal_settings_data: return ark_data
+        
+        ark_data = dict(ark_data)
+        
+        input_settings_data = ark_data.get("input_settings")
+        input_settings_data = dict(input_settings_data) if input_settings_data else {}
+        
+        names_set = MouselookNavigation_InputSettings.overrides_names_set
+        
+        overrides = set()
+        input_settings_data["overrides"] = overrides
+        
+        for key, value in universal_settings_data.items():
+            if key in input_settings_data:
+                if key in names_set: overrides.add(key)
+            else:
+                input_settings_data[key] = value
+        
+        ark_data["input_settings"] = input_settings_data
+        
+        return ark_data
     
     def apply(self, context):
         wm = context.window_manager
@@ -1499,13 +1608,15 @@ class AutoregKeymapPreset:
         settings.flips.zoom_wheel = "zoom_wheel" in flips
         
         settings.use_universal_input_settings = self.data.get("universal", True)
+        universal_settings_data = self.data.get("settings")
         BlRna.reset(settings.universal_input_settings)
-        BlRna.deserialize(settings.universal_input_settings, self.data.get("settings"))
+        BlRna.deserialize(settings.universal_input_settings, universal_settings_data)
         
         while settings.autoreg_keymaps:
             settings.autoreg_keymaps.remove(0)
         
         for ark_data in self.data.get("keymaps", tuple()):
+            ark_data = self._fill_defaults(ark_data, universal_settings_data)
             ark = settings.autoreg_keymaps.add()
             BlRna.deserialize(ark, ark_data)
             ark.index = len(settings.autoreg_keymaps)-1
@@ -1655,7 +1766,7 @@ class ThisAddonPreferences:
             return getattr(self, attr_name)
     
     def calc_zbrush_mode(self):
-        if self.use_universal_input_settings:
+        if self.is_using_universal_input_settings:
             return (self.universal_input_settings.zbrush_mode != 'NONE')
         return any((ark.input_settings.zbrush_mode != 'NONE') for ark in self.autoreg_keymaps)
     zbrush_mode: False | prop(get=calc_zbrush_mode)
@@ -1665,6 +1776,10 @@ class ThisAddonPreferences:
     autoreg_keymap_id: 0 | prop("Keymap ID", "Keymap ID", min=0)
     use_universal_input_settings: True | prop("Universal", "Use same settings for each keymap")
     universal_input_settings: MouselookNavigation_InputSettings | prop()
+    
+    @property
+    def is_using_universal_input_settings(self):
+        return self.use_universal_input_settings or (len(self.autoreg_keymaps) == 0)
     
     zbrush_radius: 0 | prop("Geometry detection radius", "Minimal required distance (in pixels) to the nearest geometry", min=0, max=64, subtype='PIXEL')
     zbrush_method: 'ZBUFFER' | prop("Geometry detection method", "Which method to use to determine if mouse is over empty space", items=[
@@ -1802,7 +1917,7 @@ class ThisAddonPreferences:
                 layout.prop(self, "show_trackball", text="", icon='HIDE_OFF', toggle=True)
     
     def draw_autoreg_keymaps(self, context, layout):
-        use_universal_input_settings = (self.use_universal_input_settings or len(self.autoreg_keymaps) == 0)
+        is_using_universal_input_settings = self.is_using_universal_input_settings
         
         with layout.row(align=True):
             self.flips.draw(layout)
@@ -1818,7 +1933,7 @@ class ThisAddonPreferences:
                 with layout.box():
                     with layout.column(align=True):
                         with layout.row():
-                            icon = (('PROP_CON' if ark.is_current else 'PROP_ON') if not use_universal_input_settings else 'PROP_OFF')
+                            icon = (('PROP_CON' if ark.is_current else 'PROP_ON') if not is_using_universal_input_settings else 'PROP_OFF')
                             layout.prop(ark, "is_current", text="", icon=icon, icon_only=True, toggle=True, emboss=False)
                             with layout.split(factor=0.6):
                                 with layout.row():
@@ -1843,12 +1958,13 @@ class ThisAddonPreferences:
                             layout.prop(ark, "insert_before", text="")
         
         with layout.box():
-            if use_universal_input_settings:
+            if is_using_universal_input_settings:
                 input_settings = self.universal_input_settings
+                input_settings.draw(layout, None)
             else:
                 autoreg_keymap_id = min(self.autoreg_keymap_id, len(self.autoreg_keymaps)-1)
                 input_settings = self.autoreg_keymaps[autoreg_keymap_id].input_settings
-            input_settings.draw(layout)
+                input_settings.draw(layout, self.universal_input_settings)
 
 def register():
     addon.register()
