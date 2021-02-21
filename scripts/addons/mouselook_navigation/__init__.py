@@ -63,7 +63,7 @@ dairin0d.load(globals(), {
 })
 
 from . import utils_navigation
-from .utils_navigation import trackball, apply_collisions, calc_selection_center, calc_zbrush_border
+from .utils_navigation import trackball, apply_collisions, calc_selection_center
 
 addon = AddonManager()
 settings = addon.settings
@@ -907,7 +907,7 @@ class MouselookNavigation:
         region_pos, region_size = self.sv.region_rect().get("min", "size", convert=Vector)
         clickable_region_pos, clickable_region_size = self.sv.region_rect(False).get("min", "size", convert=Vector)
         
-        self.zbrush_border = calc_zbrush_border(self.sv.area, self.sv.region, settings.zbrush_border_scale*0.01, settings.zbrush_border_min)
+        self.zbrush_border = settings.calc_zbrush_border_size(self.sv.area, self.sv.region)
         
         self.km = InputKeyMonitor(event)
         self.create_keycheckers(event, input_settings)
@@ -1255,7 +1255,7 @@ def draw_callback_px(self, context):
         
         full_rect = BlUI.calc_region_rect(area, region)
         clickable_rect = BlUI.calc_region_rect(area, region, False)
-        border = calc_zbrush_border(area, region, settings.zbrush_border_scale*0.01, settings.zbrush_border_min)
+        border = settings.calc_zbrush_border_size(area, region)
         color = settings.get_color("color_zbrush_border")
         
         x, y = clickable_rect.min - full_rect.min
@@ -1638,6 +1638,12 @@ class ThisAddonPreferences:
     zbrush_border_scale: 5.0 | prop("ZBrush border scale", "Size of ZBrush border (relative to viewport size)",
         min=0.0, max=25.0, precision=1, subtype='PERCENTAGE')
     zbrush_border_min: 16 | prop("ZBrush border min size", "Minimal size of ZBrush border (in pixels)", min=0, subtype='PIXEL')
+    
+    def calc_zbrush_border_size(self, area, region):
+        scale = self.zbrush_border_scale * 0.01
+        abs_min = self.zbrush_border_min * BlUI.ui_scale()
+        size_min = BlUI.calc_region_rect(area, region, overlap=False).size.min()
+        return max(size_min * scale, abs_min)
     
     def get_color(self, attr_name):
         if self.use_blender_colors:
