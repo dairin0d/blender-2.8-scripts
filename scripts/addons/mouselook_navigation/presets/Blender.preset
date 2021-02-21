@@ -45,14 +45,13 @@
                     "keys_fps_teleport": "{Invoke key}, V",
                     "keys_orbit": "",
                     "keys_orbit_snap": "Alt",
-                    "keys_origin_mouse": "",
-                    "keys_origin_selection": "",
                     "keys_pan": "Shift",
                     "keys_rotmode_switch": "Space: Press",
                     "keys_zoom": "Ctrl",
                     "name": "",
+                    "origin_mode": "PREFS",
                     "ortho_unrotate": true,
-                    "zbrush_mode": false
+                    "zbrush_mode": "NONE"
                 },
                 "insert_after": "view3d.manipulator",
                 "insert_before": "*",
@@ -105,14 +104,13 @@
             "keys_fps_teleport": "{Invoke key}, V",
             "keys_orbit": "",
             "keys_orbit_snap": "Alt",
-            "keys_origin_mouse": "",
-            "keys_origin_selection": "",
             "keys_pan": "Shift",
             "keys_rotmode_switch": "Space: Press",
             "keys_zoom": "Ctrl",
             "name": "",
+            "origin_mode": "PREFS",
             "ortho_unrotate": true,
-            "zbrush_mode": false
+            "zbrush_mode": "NONE"
         },
         "universal": true
     }

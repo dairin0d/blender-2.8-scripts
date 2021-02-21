@@ -153,7 +153,7 @@ class MouselookNavigation_InputSettings:
     modes = ['ORBIT', 'PAN', 'DOLLY', 'ZOOM', 'FLY', 'FPS']
     transitions = ['NONE:ORBIT', 'NONE:PAN', 'NONE:DOLLY', 'NONE:ZOOM', 'NONE:FLY', 'NONE:FPS', 'ORBIT:PAN', 'ORBIT:DOLLY', 'ORBIT:ZOOM', 'ORBIT:FLY', 'ORBIT:FPS', 'PAN:DOLLY', 'PAN:ZOOM', 'DOLLY:ZOOM', 'FLY:FPS']
     
-    default_mode: 'ORBIT' | prop("Default mode", "Default mode", items=[(mode, f"Default: {mode}", "") for mode in modes])
+    default_mode: 'ORBIT' | prop("Default mode", "Default mode", items=[(mode, f"Mode: {mode}", "") for mode in modes])
     allowed_transitions: set(transitions) | prop("Transitions", "Allowed transitions between modes", items=transitions)
     
     ortho_unrotate: True | prop("Ortho unrotate", "In Ortho mode, rotation is abandoned if another mode is selected")
@@ -161,9 +161,16 @@ class MouselookNavigation_InputSettings:
     independent_modes: False | prop("Independent modes", "When switching to a different mode, use the mode's last position/rotation/zoom")
     
     zbrush_mode: 'NONE' | prop("ZBrush mode", "Invoke the operator only when mouse is over empty space or near the region border", items=[
-        ('NONE', "ZBrush mode: Off", "Don't use ZBrush behavior"),
-        ('SIMPLE', "ZBrush mode: Simple", "Use ZBrush behavior only when no modifier keys are pressed"),
-        ('ALWAYS', "ZBrush mode: Always", "Always use ZBrush behavior"),
+        ('NONE', "ZBrush: Off", "Don't use ZBrush behavior"),
+        ('SIMPLE', "ZBrush: Simple", "Use ZBrush behavior only when no modifier keys are pressed"),
+        ('ALWAYS', "ZBrush: Always", "Always use ZBrush behavior"),
+    ])
+    
+    origin_mode: 'PREFS' | prop("Orbit origin", "What to use as the orbit origin", items=[
+        ('PREFS', "Origin: Auto", "Determine orbit origin from Blender's input preferences"),
+        ('VIEW', "Origin: View", "Use 3D View's orbit center"),
+        ('MOUSE', "Origin: Mouse", "Orbit around the point under the mouse"),
+        ('SELECTION', "Origin: Selection", "Orbit around the selection pivot"),
     ])
     
     def _keyprop(name, default_keys, tooltip=""):
@@ -171,8 +178,6 @@ class MouselookNavigation_InputSettings:
     keys_confirm: _keyprop("Confirm", "Ret, Numpad Enter, Left Mouse: Press")
     keys_cancel: _keyprop("Cancel", "Esc, Right Mouse: Press")
     keys_rotmode_switch: _keyprop("Trackball on/off", "Space: Press")
-    keys_origin_mouse: _keyprop("Origin: Mouse", "")
-    keys_origin_selection: _keyprop("Origin: Selection", "")
     keys_orbit: _keyprop("Orbit", "") # main operator key (MMB) by default
     keys_orbit_snap: _keyprop("Orbit Snap", "Alt")
     keys_pan: _keyprop("Pan", "Shift")
@@ -196,10 +201,12 @@ class MouselookNavigation_InputSettings:
     
     def draw(self, layout):
         with layout.row():
-            layout.prop(self, "default_mode", text="")
+            with layout.row(align=True):
+                layout.prop(self, "default_mode", text="")
+                layout.prop(self, "independent_modes", text="Independent", toggle=True)
             layout.prop(self, "zbrush_mode", text="")
+            layout.prop(self, "origin_mode", text="")
             layout.prop(self, "ortho_unrotate", toggle=True)
-            layout.prop(self, "independent_modes", toggle=True)
         
         with layout.split(factor=0.15):
             with layout.column():
@@ -213,9 +220,8 @@ class MouselookNavigation_InputSettings:
                     with layout.column():
                         layout.prop(self, "keys_confirm")
                         layout.prop(self, "keys_cancel")
+                        layout.separator()
                         layout.prop(self, "keys_rotmode_switch")
-                        layout.prop(self, "keys_origin_mouse")
-                        layout.prop(self, "keys_origin_selection")
                         layout.prop(self, "keys_orbit")
                         layout.prop(self, "keys_orbit_snap")
                         layout.prop(self, "keys_pan")
@@ -248,6 +254,7 @@ class MouselookNavigation:
         self.ortho_unrotate = input_settings.ortho_unrotate
         self.independent_modes = input_settings.independent_modes
         self.zbrush_mode = input_settings.zbrush_mode
+        self.origin_mode = input_settings.origin_mode
     
     def create_keycheckers(self, event, input_settings):
         self.keys_invoke = self.km.keychecker(event.type)
@@ -258,8 +265,6 @@ class MouselookNavigation:
         self.keys_confirm = self.km.keychecker(input_settings.keys_confirm)
         self.keys_cancel = self.km.keychecker(input_settings.keys_cancel)
         self.keys_rotmode_switch = self.km.keychecker(input_settings.keys_rotmode_switch)
-        self.keys_origin_mouse = self.km.keychecker(input_settings.keys_origin_mouse)
-        self.keys_origin_selection = self.km.keychecker(input_settings.keys_origin_selection)
         self.keys_orbit = self.km.keychecker(input_settings.keys_orbit)
         self.keys_orbit_snap = self.km.keychecker(input_settings.keys_orbit_snap)
         self.keys_pan = self.km.keychecker(input_settings.keys_pan)
@@ -914,16 +919,27 @@ class MouselookNavigation:
         self.input_axis_mode = 'XY'
         
         self.zoom_to_selection = settings.zoom_to_selection
-        self.force_origin_mouse = self.keys_origin_mouse()
-        self.force_origin_selection = self.keys_origin_selection()
-        self.use_origin_mouse = userprefs.inputs.use_mouse_depth_navigate
-        self.use_origin_selection = userprefs.inputs.use_rotate_around_active
-        if self.force_origin_selection:
-            self.use_origin_selection = True
+        
+        if self.origin_mode == 'SELECTION':
+            self.force_origin_mouse = False
+            self.force_origin_selection = True
             self.use_origin_mouse = False
-        elif self.force_origin_mouse:
-            self.use_origin_selection = False
+            self.use_origin_selection = True
+        elif self.origin_mode == 'MOUSE':
+            self.force_origin_mouse = True
+            self.force_origin_selection = False
             self.use_origin_mouse = True
+            self.use_origin_selection = False
+        elif self.origin_mode == 'VIEW':
+            self.force_origin_mouse = False
+            self.force_origin_selection = False
+            self.use_origin_mouse = False
+            self.use_origin_selection = False
+        else:
+            self.force_origin_mouse = False
+            self.force_origin_selection = False
+            self.use_origin_mouse = userprefs.inputs.use_mouse_depth_navigate
+            self.use_origin_selection = userprefs.inputs.use_rotate_around_active
         
         is_sculpt = (context.mode == 'SCULPT')
         is_dyntopo = False
