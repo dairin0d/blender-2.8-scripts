@@ -1531,6 +1531,7 @@ class AutoregKeymapPreset:
     
     def _cleanup_overrides(self, input_settings_data):
         input_settings_data.pop("overrides", None)
+        return input_settings_data
     
     def _cleanup_ark_data(self, ark_data):
         ark_data.pop("is_current", None)
@@ -1539,7 +1540,7 @@ class AutoregKeymapPreset:
         input_settings_data = ark_data.get("input_settings")
         if input_settings_data:
             # Note: only remove non-overridden settings if overrides actually exist
-            overrides = ark_data.get("overrides")
+            overrides = input_settings_data.get("overrides")
             if overrides is not None:
                 for key in tuple(input_settings_data.keys()):
                     if key in overrides: continue
