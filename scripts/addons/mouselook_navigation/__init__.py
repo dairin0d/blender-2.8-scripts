@@ -1091,7 +1091,7 @@ class MouselookNavigation:
         result = {}
         
         def draw_callback():
-            cast_result = self.sv.depth_cast(mouse_region, depthcast_radius, coords='WINDOW')
+            cast_result = self.sv.depth_cast(mouse_region, depthcast_radius)
             result["cast_result"] = cast_result
         
         context = bpy.context

@@ -758,7 +758,9 @@ class SmartView3D:
         return a, b
     
     def read_zbuffer(self, xy, wh=(1, 1), centered=False, coords='REGION'):
-        xy = self.convert_ui_coord(xy, coords, 'WINDOW', False)
+        # In Blender 2.80+, instead of a single buffer for the whole window,
+        # there seems to be a separate buffer for each region
+        xy = self.convert_ui_coord(xy, coords, 'REGION', False)
         return cgl.read_zbuffer(xy, wh, centered)
     
     def zbuf_to_depth(self, zbuf):
