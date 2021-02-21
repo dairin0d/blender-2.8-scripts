@@ -177,9 +177,9 @@ class MouselookNavigation_InputSettings:
         return default_keys | prop(name, tooltip or name)
     keys_confirm: _keyprop("Confirm", "Ret, Numpad Enter, Left Mouse: Press")
     keys_cancel: _keyprop("Cancel", "Esc, Right Mouse: Press")
-    keys_rotmode_switch: _keyprop("Trackball on/off", "Space: Press")
+    keys_rotmode_switch: _keyprop("Trackball", "Space: Press", tooltip="Trackball on/off")
     keys_orbit: _keyprop("Orbit", "") # main operator key (MMB) by default
-    keys_orbit_snap: _keyprop("Orbit Snap", "Alt")
+    keys_orbit_snap: _keyprop("Snap", "Alt", tooltip="Orbit Snap")
     keys_pan: _keyprop("Pan", "Shift")
     keys_dolly: _keyprop("Dolly", "")
     keys_zoom: _keyprop("Zoom", "Ctrl")
@@ -215,9 +215,9 @@ class MouselookNavigation_InputSettings:
                     layout.prop(self, "allowed_transitions")
             
             with layout.column():
-                layout.label(text="Navigation shortcuts:")
                 with layout.row():
                     with layout.column():
+                        layout.label(text="Navigation shortcuts:")
                         layout.prop(self, "keys_confirm")
                         layout.prop(self, "keys_cancel")
                         layout.separator()
@@ -232,17 +232,18 @@ class MouselookNavigation_InputSettings:
                         layout.prop(self, "keys_x_only")
                         layout.prop(self, "keys_y_only")
                     with layout.column():
-                        layout.prop(self, "keys_FPS_forward")
-                        layout.prop(self, "keys_FPS_back")
-                        layout.prop(self, "keys_FPS_left")
-                        layout.prop(self, "keys_FPS_right")
-                        layout.prop(self, "keys_FPS_up")
-                        layout.prop(self, "keys_FPS_down")
-                        layout.prop(self, "keys_fps_acceleration")
-                        layout.prop(self, "keys_fps_slowdown")
-                        layout.prop(self, "keys_fps_crouch")
-                        layout.prop(self, "keys_fps_jump")
-                        layout.prop(self, "keys_fps_teleport")
+                        layout.label(text="FPS mode shortcuts:")
+                        layout.prop(self, "keys_FPS_forward", text="Forward")
+                        layout.prop(self, "keys_FPS_back", text="Back")
+                        layout.prop(self, "keys_FPS_left", text="Left")
+                        layout.prop(self, "keys_FPS_right", text="Right")
+                        layout.prop(self, "keys_FPS_up", text="Up")
+                        layout.prop(self, "keys_FPS_down", text="Down")
+                        layout.prop(self, "keys_fps_acceleration", text="Faster")
+                        layout.prop(self, "keys_fps_slowdown", text="Slower")
+                        layout.prop(self, "keys_fps_crouch", text="Crouch")
+                        layout.prop(self, "keys_fps_jump", text="Jump")
+                        layout.prop(self, "keys_fps_teleport", text="Teleport")
 
 @addon.Operator(idname="mouselook_navigation.navigate", label="Mouselook navigation", description="Mouselook navigation", options={'GRAB_CURSOR', 'BLOCKING'})
 class MouselookNavigation:
@@ -1386,7 +1387,7 @@ def update_keymaps(activate=True):
 @addon.PropertyGroup
 class AutoRegKeymapInfo:
     mode_names = ['3D View', 'Object Mode', 'Mesh', 'Curve', 'Armature', 'Metaball', 'Lattice', 'Font', 'Pose', 'Vertex Paint', 'Weight Paint', 'Image Paint', 'Sculpt', 'Particle']
-    keymaps: {'3D View'} | prop("Keymaps", "Keymaps", items=mode_names)
+    keymaps: {'3D View'} | prop("Keymaps", "To which keymaps this entry should be added", items=mode_names)
     value_type: "" | prop("Type of event", "Type of event")
     any: False | prop("Any", "Any modifier")
     shift: False | prop("Shift", "Shift")
@@ -1408,7 +1409,8 @@ class AutoRegKeymapInfo:
             settings.use_universal_input_settings = False
         else:
             settings.use_universal_input_settings = True
-    is_current: False | prop(get=get_is_current, set=set_is_current)
+    is_current: False | prop("(Un)select this keymap entry", "(if selected, its settings will be shown below)",
+        get=get_is_current, set=set_is_current)
     index: 0 | prop()
 
 @addon.Operator.execute(idname="mouselook_navigation.autoreg_keymap_add", label="Add Autoreg Keymap")
@@ -1615,10 +1617,10 @@ class ThisAddonPreferences:
     
     animation_fps: 50.0 | prop("Animation timer FPS", "Animation timer FPS")
     
-    raycast_modes: BlEnums.context_modes | prop("Raycast modes",
-        "Object modes in which raycasting/selection is enabled\n"+
-        "(e.g. you might want to disable raycasting for Sculpt mode, "+
-        "because there raycasting is slow for high-detail meshes)",
+    raycast_modes: BlEnums.context_modes | prop("Object modes",
+        "Object modes in which geometry detection is enabled\n"+
+        "(e.g. Raycast and Selection methods are slow when sculpting high-detail meshes, "+
+        "so you might want to disable them for Sculpt mode)",
         items=[(mode_info.context, mode_info.name, mode_info.name) for mode_info in BlEnums.mode_infos.values()])
     
     adjust_multires: False | prop("Adjust Multires", "If enabled, and the 'Fast Navigate' option "+
@@ -1658,11 +1660,11 @@ class ThisAddonPreferences:
     use_universal_input_settings: True | prop("Universal", "Use same settings for each keymap")
     universal_input_settings: MouselookNavigation_InputSettings | prop()
     
-    zbrush_radius: 0 | prop("ZBrush radius", "Minimal required distance (in pixels) to the nearest geometry", min=0, max=64)
-    zbrush_method: 'ZBUFFER' | prop("ZBrush method", "Which method to use to determine if mouse is over empty space", items=[
-        ('RAYCAST', "Raycast"),
-        ('SELECTION', "Selection"),
-        ('ZBUFFER', "Z-buffer"),
+    zbrush_radius: 0 | prop("Geometry detection radius", "Minimal required distance (in pixels) to the nearest geometry", min=0, max=64, subtype='PIXEL')
+    zbrush_method: 'ZBUFFER' | prop("Geometry detection method", "Which method to use to determine if mouse is over empty space", items=[
+        ('RAYCAST', "Raycast", "WARNING: causes problems in Sculpt mode"),
+        ('SELECTION', "Selection", "WARNING: causes problems in Sculpt mode"),
+        ('ZBUFFER', "Z-buffer", "WARNING: may potentially crash Blender, if other addons attempt to use wm.redraw_timer() in the same frame"),
     ])
     
     flips: NavigationDirectionFlip | prop()
@@ -1671,7 +1673,7 @@ class ThisAddonPreferences:
     rotation_speed_modifier: 1.0 | prop("Rotation speed", "Rotation speed")
     fps_speed_modifier: 1.0 | prop("FPS speed", "FPS movement speed")
     fps_horizontal: False | prop("FPS horizontal", "Force forward/backward to be in horizontal plane, and up/down to be vertical")
-    zoom_to_selection: True | prop("Zoom to selection", "Zoom to selection when Rotate Around Selection is enabled")
+    zoom_to_selection: True | prop("Zoom to selection", "Zoom to selection when Orbit Around Selection is enabled")
     trackball_mode: 'WRAPPED' | prop("Trackball mode", "Rotation algorithm used in trackball mode", items=[
         ('BLENDER', 'Blender', 'Blender (buggy!)', 'ERROR'),
         ('WRAPPED', 'Wrapped'),
@@ -1722,42 +1724,76 @@ class ThisAddonPreferences:
                 layout.operator("wm.url_open", text="MACHIN3 tools").url = "https://machin3.io/"
     
     def draw_settings(self, context, layout):
-        with layout.row():
-            with layout.row()(alignment='LEFT'):
-                layout.label(text="General settings:")
-            with layout.row()(alignment='RIGHT'):
-                with layout.row(align=True)(alignment='RIGHT'):
-                    layout.prop(self, "auto_trackball", text="Auto Trackball", toggle=True)
-                    layout.prop_menu_enum(self, "auto_trackball_modes", text="", icon='TRIA_DOWN')
-                layout.popover("VIEW3D_PT_mouselook_navigation_header_popover", text="3D View Extras")
+        with layout.box():
+            with layout.row():
+                layout.label(text="UI:")
+                with layout.row()(alignment='RIGHT'):
+                    layout.prop(self, "show_in_shelf", toggle=True)
+                    layout.prop(self, "show_in_header", toggle=True)
+                    layout.prop(self, "use_blender_colors", toggle=True)
+            
+            with layout.row():
+                with layout.box():
+                    with layout.row():
+                        layout.prop(self, "show_crosshair", text="Crosshair", toggle=True)
+                        with layout.row()(active=self.show_crosshair):
+                            layout.prop(self, "show_focus", text="Orbit Center", toggle=True)
+                    with layout.column()(active=self.show_crosshair):
+                        layout.row().prop(self, "color_crosshair_visible", text="Visible")
+                        layout.separator(factor=0.5)
+                        layout.row().prop(self, "color_crosshair_obscured", text="Obscured")
+                
+                with layout.box():
+                    layout.prop(self, "show_zbrush_border", text="ZBrush border", toggle=True)
+                    with layout.row()(active=self.show_zbrush_border):
+                        layout.prop(self, "zbrush_border_scale", text="Scale", slider=True)
+                        layout.prop(self, "zbrush_border_min", text="Min")
+                    with layout.row()(active=self.show_zbrush_border):
+                        layout.row().prop(self, "color_zbrush_border", text="Color")
         
         with layout.box():
+            with layout.row():
+                layout.label(text="Behavior:")
+                layout.prop(self, "pass_through", toggle=True)
+                layout.prop(self, "animation_fps", text="Framerate")
+            with layout.row():
+                layout.prop(self, "fps_horizontal", toggle=True)
+                layout.prop(self, "zoom_to_selection", toggle=True)
+                layout.prop(self, "adjust_multires", toggle=True)
+            
+            with layout.column(align=True):
+                with layout.row(align=True):
+                    layout.prop(self, "zoom_speed_modifier", text="Zoom speed")
+                    layout.prop(self, "rotation_speed_modifier", text="Rotation speed")
+                with layout.row(align=True):
+                    layout.prop(self, "fps_speed_modifier", text="Movement speed")
+                    layout.prop(self, "autolevel_speed_modifier", text="Autolevel speed")
+            
             with layout.row()(alignment='LEFT'):
-                layout.prop(self, "show_in_shelf")
-                layout.prop(self, "show_in_header")
-                layout.prop(self, "pass_through")
-                layout.prop(self, "animation_fps", text="FPS")
+                layout.label(text="Geometry detection:")
+                with layout.row():
+                    layout.prop(self, "zbrush_method", text="")
+                    layout.prop_menu_enum(self, "raycast_modes", text="Object modes")
+                    with layout.row()(scale_x=0.85):
+                        layout.prop(self, "zbrush_radius", text="Radius")
             
-            with layout.row():
-                layout.prop(self, "zbrush_radius")
-                layout.prop_menu_enum(self, "zbrush_method")
-                layout.prop_menu_enum(self, "raycast_modes")
-                layout.prop(self, "adjust_multires")
+            with layout.row()(alignment='LEFT'):
+                layout.label(text="Orbit snap:")
+                layout.prop(self, "rotation_snap_autoperspective", text="To Ortho", toggle=True)
+                with layout.row()(scale_x=0.85):
+                    layout.prop(self, "rotation_snap_subdivs", text="Subdivs")
             
-            with layout.row():
-                with layout.column():
-                    layout.prop(self, "zbrush_border_scale", text="Border Scale", slider=True)
-                    layout.prop(self, "show_zbrush_border")
-                    layout.prop(self, "show_crosshair")
-                    layout.prop(self, "show_focus")
-                with layout.column():
-                    with layout.row():
-                        layout.prop(self, "zbrush_border_min", text="Border Min")
-                        layout.prop(self, "use_blender_colors")
-                    with layout.column()(active=not self.use_blender_colors):
-                        layout.row().prop(self, "color_zbrush_border")
-                        layout.row().prop(self, "color_crosshair_visible")
-                        layout.row().prop(self, "color_crosshair_obscured")
+            with layout.row()(alignment='LEFT'):
+                layout.label(text="Trackball:")
+                layout.prop(*settings("trackball_mode"), text="")
+                with layout.row(align=True):
+                    layout.prop(*settings("autolevel_trackball"), text="Autolevel", toggle=True)
+                    with layout.row(align=True)(active=settings.autolevel_trackball):
+                        layout.prop(*settings("autolevel_trackball_up"), text="", icon='EMPTY_SINGLE_ARROW', toggle=True)
+                with layout.row(align=True)(alignment='RIGHT'):
+                    layout.prop(self, "auto_trackball", text="Auto switch", toggle=True)
+                    layout.prop_menu_enum(self, "auto_trackball_modes", text="", icon='TRIA_DOWN')
+                layout.prop(self, "show_trackball", text="", icon='HIDE_OFF', toggle=True)
     
     def draw_autoreg_keymaps(self, context, layout):
         use_universal_input_settings = (self.use_universal_input_settings or len(self.autoreg_keymaps) == 0)
@@ -1774,27 +1810,31 @@ class ThisAddonPreferences:
             autoreg_keymaps = self.autoreg_keymaps
             for i, ark in enumerate(autoreg_keymaps):
                 with layout.box():
-                    with layout.row():
-                        icon = (('PROP_CON' if ark.is_current else 'PROP_ON') if not use_universal_input_settings else 'PROP_OFF')
-                        layout.prop(ark, "is_current", text="", icon=icon, icon_only=True, toggle=True, emboss=False)
-                        with layout.split(factor=0.6):
-                            with layout.row():
-                                layout.prop_menu_enum(ark, "keymaps", text="Keymaps")
-                                layout.prop(ark, "value_type", text="")
-                            with layout.split(factor=0.7, align=True):
-                                with layout.row(align=True):
-                                    not_any = not ark.any
-                                    layout.prop(ark, "any", toggle=True)
-                                    layout.row(align=True)(active=not_any).prop(ark, "shift", toggle=True)
-                                    layout.row(align=True)(active=not_any).prop(ark, "ctrl", toggle=True)
-                                    layout.row(align=True)(active=not_any).prop(ark, "alt", toggle=True)
-                                    layout.row(align=True)(active=not_any).prop(ark, "oskey", toggle=True)
-                                layout.prop(ark, "key_modifier", text="")
-                        layout.operator("mouselook_navigation.autoreg_keymap_remove", text="", icon='X').index = i
-                    with layout.row():
-                        layout.prop(ark, "insert_after", text="")
-                        layout.label(icon='ARROW_LEFTRIGHT')
-                        layout.prop(ark, "insert_before", text="")
+                    with layout.column(align=True):
+                        with layout.row():
+                            icon = (('PROP_CON' if ark.is_current else 'PROP_ON') if not use_universal_input_settings else 'PROP_OFF')
+                            layout.prop(ark, "is_current", text="", icon=icon, icon_only=True, toggle=True, emboss=False)
+                            with layout.split(factor=0.6):
+                                with layout.row():
+                                    layout.prop_menu_enum(ark, "keymaps", text="Keymaps")
+                                    layout.prop(ark, "value_type", text="")
+                                with layout.split(factor=0.7, align=True):
+                                    with layout.row(align=True):
+                                        not_any = not ark.any
+                                        layout.prop(ark, "any", toggle=True)
+                                        layout.row(align=True)(active=not_any).prop(ark, "shift", toggle=True)
+                                        layout.row(align=True)(active=not_any).prop(ark, "ctrl", toggle=True)
+                                        layout.row(align=True)(active=not_any).prop(ark, "alt", toggle=True)
+                                        layout.row(align=True)(active=not_any).prop(ark, "oskey", toggle=True)
+                                    layout.prop(ark, "key_modifier", text="")
+                            layout.operator("mouselook_navigation.autoreg_keymap_remove", text="", icon='X').index = i
+                        
+                        layout.separator(factor=0.5)
+                        
+                        with layout.row():
+                            layout.prop(ark, "insert_after", text="")
+                            layout.label(icon='ARROW_LEFTRIGHT')
+                            layout.prop(ark, "insert_before", text="")
         
         with layout.box():
             if use_universal_input_settings:
