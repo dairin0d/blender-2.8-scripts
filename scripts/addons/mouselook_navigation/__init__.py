@@ -1235,16 +1235,18 @@ def draw_crosshair(self, context, use_focus):
             batch.draw(shader)
 
 def draw_callback_view(self, context):
-    if self.sv.region_data != context.region_data:
-        return
+    if not settings.is_enabled: return
+    
+    if self.sv.region_data != context.region_data: return
     
     if self.show_crosshair:
         draw_crosshair(self, context, False)
         draw_crosshair(self, context, True)
 
 def draw_callback_px(self, context):
+    if not settings.is_enabled: return
+    
     context = bpy.context # we need most up-to-date context
-    userprefs = context.preferences
     
     if settings.show_zbrush_border and settings.zbrush_mode:
         area = context.area
