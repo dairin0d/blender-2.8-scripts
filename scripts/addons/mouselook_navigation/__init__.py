@@ -1399,6 +1399,9 @@ def update_keymaps(activate=True):
         # wants standard Blender control scheme (mouse to orbit/pan/zoom, Shift+F to fly/walk)
         keymaps = wm.keyconfigs.user.keymaps
         
+        # Note: I use ANY event by default, because otherwise the Fly-mode's default
+        # "{Invoke key}: Double click" shortcut won't work (or we'd need multiple keymaps)
+        
         if len(settings.autoreg_keymaps) == 0 and settings.use_default_keymap:
             # Since Blender 2.91, there are multiple view3d.rotate keymaps
             default_keys = {kmi.type for kc, km, kmi in KeyMapUtils.search("view3d.rotate")}
