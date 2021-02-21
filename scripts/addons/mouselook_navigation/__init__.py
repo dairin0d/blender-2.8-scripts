@@ -153,7 +153,7 @@ class MouselookNavigation_InputSettings:
     modes = ['ORBIT', 'PAN', 'DOLLY', 'ZOOM', 'FLY', 'FPS']
     transitions = ['NONE:ORBIT', 'NONE:PAN', 'NONE:DOLLY', 'NONE:ZOOM', 'NONE:FLY', 'NONE:FPS', 'ORBIT:PAN', 'ORBIT:DOLLY', 'ORBIT:ZOOM', 'ORBIT:FLY', 'ORBIT:FPS', 'PAN:DOLLY', 'PAN:ZOOM', 'DOLLY:ZOOM', 'FLY:FPS']
     
-    default_mode: 'ORBIT' | prop("Default mode", "Default mode", items=modes)
+    default_mode: 'ORBIT' | prop("Default mode", "Default mode", items=[(mode, f"Default: {mode}", "") for mode in modes])
     allowed_transitions: set(transitions) | prop("Transitions", "Allowed transitions between modes", items=transitions)
     
     ortho_unrotate: True | prop("Ortho unrotate", "In Ortho mode, rotation is abandoned if another mode is selected")
@@ -195,6 +195,12 @@ class MouselookNavigation_InputSettings:
     keys_y_only: _keyprop("Y only", "Y: Press", tooltip="Toggle Y-axis input")
     
     def draw(self, layout):
+        with layout.row():
+            layout.prop(self, "default_mode", text="")
+            layout.prop(self, "zbrush_mode", text="")
+            layout.prop(self, "ortho_unrotate", toggle=True)
+            layout.prop(self, "independent_modes", toggle=True)
+        
         with layout.split(factor=0.15):
             with layout.column():
                 layout.label(text="Transitions:")
@@ -205,11 +211,8 @@ class MouselookNavigation_InputSettings:
                 layout.label(text="Navigation shortcuts:")
                 with layout.row():
                     with layout.column():
-                        layout.prop(self, "default_mode")
-                        layout.prop(self, "ortho_unrotate", toggle=True)
-                        layout.prop(self, "independent_modes", toggle=True)
-                        layout.prop(self, "zbrush_mode", text="")
-                        #layout.label() # just an empty line
+                        layout.prop(self, "keys_confirm")
+                        layout.prop(self, "keys_cancel")
                         layout.prop(self, "keys_rotmode_switch")
                         layout.prop(self, "keys_origin_mouse")
                         layout.prop(self, "keys_origin_selection")
@@ -220,12 +223,9 @@ class MouselookNavigation_InputSettings:
                         layout.prop(self, "keys_zoom")
                         layout.prop(self, "keys_fly")
                         layout.prop(self, "keys_fps")
-                        layout.separator()
                         layout.prop(self, "keys_x_only")
+                        layout.prop(self, "keys_y_only")
                     with layout.column():
-                        layout.prop(self, "keys_confirm")
-                        layout.prop(self, "keys_cancel")
-                        layout.label() # just an empty line
                         layout.prop(self, "keys_FPS_forward")
                         layout.prop(self, "keys_FPS_back")
                         layout.prop(self, "keys_FPS_left")
@@ -237,8 +237,6 @@ class MouselookNavigation_InputSettings:
                         layout.prop(self, "keys_fps_crouch")
                         layout.prop(self, "keys_fps_jump")
                         layout.prop(self, "keys_fps_teleport")
-                        layout.separator()
-                        layout.prop(self, "keys_y_only")
 
 @addon.Operator(idname="mouselook_navigation.navigate", label="Mouselook navigation", description="Mouselook navigation", options={'GRAB_CURSOR', 'BLOCKING'})
 class MouselookNavigation:
@@ -1587,7 +1585,8 @@ class InternalPG:
 @addon.Preferences.Include
 class ThisAddonPreferences:
     prefs_tab: 'SETTINGS' | prop("Tab", "Which tab to show in addon preferences", items=[
-        ('SETTINGS', "Settings", "Settings"),
+        ('SETTINGS', "Settings", "General settings"),
+        ('KEYMAPS', "Keymaps", "Setup auto-registered keymaps"),
         ('ABOUT', "About", "About"),
     ])
     
@@ -1681,31 +1680,30 @@ class ThisAddonPreferences:
         items=[(mode_name, BlEnums.get_mode_name(mode_name), "") for mode_name in sorted(BlEnums.context_modes)])
     
     def draw(self, context):
-        layout = self.layout
-        row = layout.row()
-        row.prop_tabs_enum(self, "prefs_tab")
-        if self.prefs_tab == 'ABOUT':
-            self.draw_about(context)
-        else:
-            self.draw_settings(context)
-    
-    def draw_about(self, context):
-        layout = self.layout
-        row = layout.row()
-        col = row.column()
-        col.label(text="Official:")
-        col.operator("wm.url_open", text="BATCH TOOLS™ 2 Store").url = "https://www.moth3r.com"
-        col.operator("wm.url_open", text="Documentation").url = "http://gum.co/mouselook"
-        col = row.column()
-        col.label(text="Recommended:")
-        col.operator("wm.url_open", text="MasterXeon1001 addons").url = "https://gumroad.com/masterxeon1001"
-        col.operator("wm.url_open", text="MACHIN3 tools").url = "https://machin3.io/"
-    
-    def draw_settings(self, context):
         layout = NestedLayout(self.layout)
         
-        use_universal_input_settings = (self.use_universal_input_settings or len(self.autoreg_keymaps) == 0)
+        with layout.row():
+            layout.prop_tabs_enum(self, "prefs_tab")
         
+        if self.prefs_tab == 'ABOUT':
+            self.draw_about(context, layout)
+        elif self.prefs_tab == 'KEYMAPS':
+            self.draw_autoreg_keymaps(context, layout)
+        else:
+            self.draw_settings(context, layout)
+    
+    def draw_about(self, context, layout):
+        with layout.row():
+            with layout.column():
+                layout.label(text="Official:")
+                layout.operator("wm.url_open", text="BATCH TOOLS™ 2 Store").url = "https://www.moth3r.com"
+                layout.operator("wm.url_open", text="Documentation").url = "http://gum.co/mouselook"
+            with layout.column():
+                layout.label(text="Recommended:")
+                layout.operator("wm.url_open", text="MasterXeon1001 addons").url = "https://gumroad.com/masterxeon1001"
+                layout.operator("wm.url_open", text="MACHIN3 tools").url = "https://machin3.io/"
+    
+    def draw_settings(self, context, layout):
         with layout.row():
             with layout.row()(alignment='LEFT'):
                 layout.label(text="General settings:")
@@ -1742,18 +1740,19 @@ class ThisAddonPreferences:
                         layout.row().prop(self, "color_zbrush_border")
                         layout.row().prop(self, "color_crosshair_visible")
                         layout.row().prop(self, "color_crosshair_obscured")
-            
-            with layout.row(align=True):
-                self.flips.draw(layout)
+    
+    def draw_autoreg_keymaps(self, context, layout):
+        use_universal_input_settings = (self.use_universal_input_settings or len(self.autoreg_keymaps) == 0)
         
-        layout.label(text="Auto-registered keymaps:")
+        with layout.row(align=True):
+            self.flips.draw(layout)
         
-        with layout.box():
-            with layout.row():
-                layout.operator("mouselook_navigation.autoreg_keymap_add", text="Add Keymap", icon='ADD')
-                layout.operator("mouselook_navigation.autoreg_keymaps_update", text="Update Keymaps", icon='FILE_REFRESH')
-                AutoregKeymapPreset.draw_popup(layout, text="Load Preset", icon='PRESET')
-            
+        with layout.row():
+            layout.operator("mouselook_navigation.autoreg_keymap_add", text="Add Keymap", icon='ADD')
+            layout.operator("mouselook_navigation.autoreg_keymaps_update", text="Update Keymaps", icon='FILE_REFRESH')
+            AutoregKeymapPreset.draw_popup(layout, text="Load Preset", icon='PRESET')
+        
+        with layout.column(align=True):
             autoreg_keymaps = self.autoreg_keymaps
             for i, ark in enumerate(autoreg_keymaps):
                 with layout.box():
@@ -1778,8 +1777,6 @@ class ThisAddonPreferences:
                         layout.prop(ark, "insert_after", text="")
                         layout.label(icon='ARROW_LEFTRIGHT')
                         layout.prop(ark, "insert_before", text="")
-        
-        layout.label(text="Transitions and navigation shortcuts:")
         
         with layout.box():
             if use_universal_input_settings:
