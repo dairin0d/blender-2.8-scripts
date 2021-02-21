@@ -1604,9 +1604,10 @@ class ThisAddonPreferences:
         "because there raycasting is slow for high-detail meshes)",
         items=[(mode_info.context, mode_info.name, mode_info.name) for mode_info in BlEnums.mode_infos.values()])
     
-    adjust_multires: True | prop("Adjust Multires", "If enabled, and the 'Fast Navigate' option "+
+    adjust_multires: False | prop("Adjust Multires", "If enabled, and the 'Fast Navigate' option "+
         "in Blender's Sculpt menu is enabled, the sculpt resolution of Multires modifier will be"+
-        "set to 1 during the navigation. However, for high-detail meshes, this can result in lag")
+        "set to 1 during the navigation. However, for high-detail meshes, this will cause lag / "+
+        "delays when starting or ending the navigation")
     
     show_crosshair: True | prop("Show Crosshair", "Crosshair visibility")
     show_focus: True | prop("Show Orbit Center", "Orbit Center visibility")
@@ -1640,11 +1641,8 @@ class ThisAddonPreferences:
     use_universal_input_settings: True | prop("Universal", "Use same settings for each keymap")
     universal_input_settings: MouselookNavigation_InputSettings | prop()
     
-    # In the old addon, the defaults were zbrush_radius=0, zbrush_method='ZBUFFER'
-    # However, since zbuffer is a much less viable option in Blender 2.80,
-    # we have to use raycasts (which are slow at big zbrush_radius) or selection.
     zbrush_radius: 0 | prop("ZBrush radius", "Minimal required distance (in pixels) to the nearest geometry", min=0, max=64)
-    zbrush_method: 'SELECTION' | prop("ZBrush method", "Which method to use to determine if mouse is over empty space", items=[
+    zbrush_method: 'ZBUFFER' | prop("ZBrush method", "Which method to use to determine if mouse is over empty space", items=[
         ('RAYCAST', "Raycast"),
         ('SELECTION', "Selection"),
         ('ZBUFFER', "Z-buffer"),
