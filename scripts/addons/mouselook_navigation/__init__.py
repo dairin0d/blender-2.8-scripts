@@ -1551,9 +1551,15 @@ class AutoregKeymapPreset:
     
     def _fix_zbrush_mode(self, d):
         if not isinstance(d, dict): return
-        zbrush_mode = d.get("zbrush_mode")
-        if not isinstance(zbrush_mode, str):
-            d["zbrush_mode"] = ('SIMPLE' if zbrush_mode else 'NONE')
+        
+        # Make sure to not add properties if they were not present (overrides depend on this)
+        if "zbrush_mode" not in d: return
+        
+        zbrush_mode = d["zbrush_mode"]
+        
+        if isinstance(zbrush_mode, str): return
+        
+        d["zbrush_mode"] = ('SIMPLE' if zbrush_mode else 'NONE')
     
     def _fix_old_versions(self, data):
         if not isinstance(data, dict): return
