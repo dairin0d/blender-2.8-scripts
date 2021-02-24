@@ -1366,12 +1366,12 @@ def background_timer_update():
 # Importantly, for this to be possible, we have to put them into a known category:
 # https://blender.stackexchange.com/questions/70697/how-to-allow-setting-hotkey-in-add-on
 
-@addon.Operator.execute(idname="view3d.mouselook_navigation_toggle_enabled", label="Enable/disable Mouselook Navigation")
+@addon.Operator.execute(idname="mouselook_navigation.toggle_enabled", label="Enable/disable Mouselook Navigation")
 def VIEW3D_OT_mouselook_navigation_toggle_enabled(self, context):
     settings.is_enabled = not settings.is_enabled
     BlUI.tag_redraw()
 
-@addon.Operator.execute(idname="view3d.mouselook_navigation_toggle_trackball", label="Use Trackball orbiting method")
+@addon.Operator.execute(idname="mouselook_navigation.toggle_trackball", label="Use Trackball orbiting method")
 def VIEW3D_OT_mouselook_navigation_toggle_trackball(self, context):
     settings.is_trackball = not settings.is_trackball
     BlUI.tag_redraw()
@@ -1641,7 +1641,7 @@ class VIEW3D_PT_mouselook_navigation:
         return addon.settings.show_in_shelf
     
     def draw_header(self, context):
-        self.layout.operator("view3d.mouselook_navigation_toggle_enabled", text="",
+        self.layout.operator("mouselook_navigation.toggle_enabled", text="",
             icon=('CHECKBOX_HLT' if settings.is_enabled else 'CHECKBOX_DEHLT'), emboss=False)
     
     def draw(self, context):
@@ -1696,9 +1696,9 @@ def draw_view3d_header(self, context):
         row = layout.row(align=True)
         
         if settings.show_trackball:
-            row.operator("view3d.mouselook_navigation_toggle_trackball", text="", icon='ORIENTATION_GIMBAL', depress=settings.is_trackball)
+            row.operator("mouselook_navigation.toggle_trackball", text="", icon='ORIENTATION_GIMBAL', depress=settings.is_trackball)
         
-        row.operator("view3d.mouselook_navigation_toggle_enabled", text="", icon='VIEW3D', depress=settings.is_enabled)
+        row.operator("mouselook_navigation.toggle_enabled", text="", icon='VIEW3D', depress=settings.is_enabled)
         row.popover("VIEW3D_PT_mouselook_navigation_header_popover", text="")
 
 @addon.PropertyGroup
