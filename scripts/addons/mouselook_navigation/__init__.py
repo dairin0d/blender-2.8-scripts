@@ -1745,7 +1745,7 @@ class ThisAddonPreferences:
         items=[(mode_info.context, mode_info.name, mode_info.name) for mode_info in BlEnums.mode_infos.values()])
     
     adjust_multires: False | prop("Adjust Multires", "If enabled, and the 'Fast Navigate' option "+
-        "in Blender's Sculpt menu is enabled, the sculpt resolution of Multires modifier will be"+
+        "in Blender's Sculpt menu is enabled, the sculpt resolution of Multires modifier will be "+
         "set to 1 during the navigation. However, for high-detail meshes, this will cause lag / "+
         "delays when starting or ending the navigation")
     
