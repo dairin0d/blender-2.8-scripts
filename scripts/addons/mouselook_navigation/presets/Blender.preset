@@ -9,7 +9,7 @@
                 "input_settings": {},
                 "insert_after": "view3d.manipulator",
                 "insert_before": "*",
-                "key_modifier": "",
+                "key_modifier": "NONE",
                 "keymaps": [
                     "3D View"
                 ],
@@ -25,7 +25,7 @@
                 "input_settings": {},
                 "insert_after": "view3d.manipulator",
                 "insert_before": "*",
-                "key_modifier": "",
+                "key_modifier": "NONE",
                 "keymaps": [
                     "3D View"
                 ],
@@ -41,7 +41,7 @@
                 "input_settings": {},
                 "insert_after": "view3d.manipulator",
                 "insert_before": "*",
-                "key_modifier": "",
+                "key_modifier": "NONE",
                 "keymaps": [
                     "3D View"
                 ],
@@ -49,7 +49,7 @@
                 "oskey": false,
                 "shift": false,
                 "value_type": "TRACKPADPAN:ANY"
-            }
+            },
         ],
         "settings": {
             "allowed_transitions": [
@@ -71,12 +71,12 @@
             ],
             "default_mode": "ORBIT",
             "independent_modes": false,
-            "keys_FPS_back": "S, Down Arrow",
-            "keys_FPS_down": "Q, F, Page Down",
-            "keys_FPS_forward": "W, Up Arrow",
-            "keys_FPS_left": "A, Left Arrow",
-            "keys_FPS_right": "D, Right Arrow",
-            "keys_FPS_up": "E, R, Page Up",
+            "keys_fps_back": "S, Down Arrow",
+            "keys_fps_down": "Q, F, Page Down",
+            "keys_fps_forward": "W, Up Arrow",
+            "keys_fps_left": "A, Left Arrow",
+            "keys_fps_right": "D, Right Arrow",
+            "keys_fps_up": "E, R, Page Up",
             "keys_cancel": "Esc, Right Mouse: Press",
             "keys_confirm": "Ret, Numpad Enter, Left Mouse: Press",
             "keys_dolly": "",
