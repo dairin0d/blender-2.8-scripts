@@ -28,7 +28,6 @@
                     "3D View",
                     "Font"
                 ],
-                "name": "",
                 "oskey": false,
                 "shift": false,
                 "value_type": "LEFTMOUSE:PRESS"
@@ -55,7 +54,6 @@
                     "3D View",
                     "Font"
                 ],
-                "name": "",
                 "oskey": false,
                 "shift": false,
                 "value_type": "LEFTMOUSE:PRESS"
@@ -104,11 +102,9 @@
             "keys_x_only": "X:PRESS",
             "keys_y_only": "Y:PRESS",
             "keys_zoom": "alt:OFF",
-            "name": "",
             "origin_mode": "PREFS",
             "ortho_unrotate": true,
             "zbrush_mode": "ALWAYS"
-        },
-        "universal": false
+        }
     }
 }

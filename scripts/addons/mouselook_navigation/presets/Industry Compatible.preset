@@ -15,7 +15,6 @@
                 "keymaps": [
                     "3D View"
                 ],
-                "name": "",
                 "oskey": false,
                 "shift": false,
                 "value_type": "LEFTMOUSE:PRESS"
@@ -33,7 +32,6 @@
                 "keymaps": [
                     "3D View"
                 ],
-                "name": "",
                 "oskey": false,
                 "shift": false,
                 "value_type": "MIDDLEMOUSE:PRESS"
@@ -51,7 +49,6 @@
                 "keymaps": [
                     "3D View"
                 ],
-                "name": "",
                 "oskey": false,
                 "shift": false,
                 "value_type": "RIGHTMOUSE:PRESS"
@@ -100,11 +97,9 @@
             "keys_x_only": "X:PRESS",
             "keys_y_only": "Y:PRESS",
             "keys_zoom": "RIGHTMOUSE:ON",
-            "name": "",
             "origin_mode": "PREFS",
             "ortho_unrotate": true,
             "zbrush_mode": "NONE"
-        },
-        "universal": false
+        }
     }
 }

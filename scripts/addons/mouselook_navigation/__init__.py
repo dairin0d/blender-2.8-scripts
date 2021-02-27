@@ -123,7 +123,7 @@ For fun: more game-like controls?
 GENERIC KEYMAP REGISTRATION:
 * Addon may have several operators with auto-registrable shortcuts. For each of them, a separate list of keymaps must be displayed (or: use tabbed interface?)
     * For a specific operator, there is a list of keymaps (generic mechanism), followed by invocation options UI (the draw function must be supplied by the implementation)
-    * List of keymap setups: each of the items is associated with (or includes?) its own operator invocation options, but it's also possible to use universal operator invocation options
+    * List of keymap setups: each of the items is associated with (or includes?) its own operator invocation options, but it's also possible to use default operator invocation options
         * Keymaps (to which the shortcuts will be inserted): by default, all possible keymaps are available, but the implementation may specify some restricted set.
             * Should be displayed as a list of toggles, but an enum property won't have enough bits for all keymaps. Use collection and custom-drawn menu with operators?
         * Event value and event type (string): this form allows to specify several alternative shortcuts, though for convenience we may provide a special UI with full_event properties
@@ -326,10 +326,10 @@ class MouselookNavigation_InputSettings:
 class MouselookNavigation:
     input_settings_id: 0 | prop("Input Settings ID", "Input Settings ID", min=0)
     
-    def copy_input_settings(self, input_settings, universal_input_settings):
+    def copy_input_settings(self, input_settings, default_input_settings):
         def get_value(name):
-            use_universal = (input_settings is None) or (name not in input_settings.overrides)
-            return getattr(universal_input_settings if use_universal else input_settings, name)
+            use_default = (input_settings is None) or (name not in input_settings.overrides)
+            return getattr(default_input_settings if use_default else input_settings, name)
         
         self.default_mode = get_value("default_mode")
         self.allowed_transitions = get_value("allowed_transitions")
@@ -338,10 +338,10 @@ class MouselookNavigation:
         self.zbrush_mode = get_value("zbrush_mode")
         self.origin_mode = get_value("origin_mode")
     
-    def create_keycheckers(self, event, input_settings, universal_input_settings):
+    def create_keycheckers(self, event, input_settings, default_input_settings):
         def get_value(name):
-            use_universal = (input_settings is None) or (name not in input_settings.overrides)
-            return getattr(universal_input_settings if use_universal else input_settings, name)
+            use_default = (input_settings is None) or (name not in input_settings.overrides)
+            return getattr(default_input_settings if use_default else input_settings, name)
         
         self.keys_invoke = self.key_monitor.keychecker(event.type)
         if event.value in {'RELEASE', 'CLICK'}:
@@ -977,15 +977,15 @@ class MouselookNavigation:
                 if (kmi.type == event.type) and (kmi.value == 'ANY'):
                     return {'CANCELLED'}
         
-        if settings.is_using_universal_input_settings:
-            universal_input_settings = settings.universal_input_settings
+        if settings.is_using_default_input_settings:
+            default_input_settings = settings.default_input_settings
             input_settings = None
         else:
-            universal_input_settings = settings.universal_input_settings
+            default_input_settings = settings.default_input_settings
             input_settings_id = min(self.input_settings_id, len(settings.autoreg_keymaps)-1)
             input_settings = settings.autoreg_keymaps[input_settings_id].input_settings
         
-        self.copy_input_settings(input_settings, universal_input_settings)
+        self.copy_input_settings(input_settings, default_input_settings)
         
         self.sv = SmartView3D(context, use_matrix=True)
         
@@ -995,7 +995,7 @@ class MouselookNavigation:
         self.zbrush_border = settings.calc_zbrush_border_size(self.sv.area, self.sv.region)
         
         self.key_monitor = InputKeyMonitor(event)
-        self.create_keycheckers(event, input_settings, universal_input_settings)
+        self.create_keycheckers(event, input_settings, default_input_settings)
         mouse_prev = Vector((event.mouse_prev_x, event.mouse_prev_y))
         mouse = Vector((event.mouse_x, event.mouse_y))
         mouse_delta = mouse - mouse_prev
@@ -1465,15 +1465,13 @@ class AutoRegKeymapInfo:
     input_settings: MouselookNavigation_InputSettings | prop()
     
     def get_is_current(self):
-        userprefs = bpy.context.preferences
-        return (settings.autoreg_keymap_id == self.index) and (not settings.is_using_universal_input_settings)
+        return (settings.autoreg_keymap_id == self.index) and (not settings.is_showing_default_input_settings)
     def set_is_current(self, value):
-        userprefs = bpy.context.preferences
         if value:
             settings.autoreg_keymap_id = self.index
-            settings.use_universal_input_settings = False
+            settings.show_default_input_settings = False
         else:
-            settings.use_universal_input_settings = True
+            settings.show_default_input_settings = True
     is_current: False | prop("(Un)select this keymap entry", "(if selected, its settings will be shown below)",
         get=get_is_current, set=set_is_current)
     index: 0 | prop()
@@ -1482,7 +1480,6 @@ class AutoRegKeymapInfo:
 def add_autoreg_keymap(self, context):
     """Add auto-registered keymap"""
     wm = context.window_manager
-    userprefs = context.preferences
     settings.use_default_keymap = False
     ark = settings.autoreg_keymaps.add()
     ark.index = len(settings.autoreg_keymaps)-1
@@ -1492,7 +1489,6 @@ def add_autoreg_keymap(self, context):
 def remove_autoreg_keymap(self, context, index=0):
     """Remove auto-registered keymap"""
     wm = context.window_manager
-    userprefs = context.preferences
     settings.use_default_keymap = False
     settings.autoreg_keymaps.remove(self.index)
     if settings.autoreg_keymap_id >= len(settings.autoreg_keymaps):
@@ -1509,13 +1505,9 @@ class AutoregKeymapPreset:
     
     def update(self, data=None, context=None):
         if data is None:
-            wm = context.window_manager
-            userprefs = context.preferences
-            
             data = dict(
                 flips=[flip for flip in self._flips if getattr(settings.flips, flip)],
-                universal=settings.use_universal_input_settings,
-                settings=self._cleanup_overrides(BlRna.serialize(settings.universal_input_settings)),
+                settings=self._cleanup_overrides(BlRna.serialize(settings.default_input_settings)),
                 keymaps=[self._cleanup_ark_data(BlRna.serialize(ark)) for ark in settings.autoreg_keymaps],
             )
         else:
@@ -1524,11 +1516,13 @@ class AutoregKeymapPreset:
         self.data = data
     
     def _cleanup_overrides(self, input_settings_data):
+        input_settings_data.pop("name", None)
         input_settings_data.pop("overrides", None)
         input_settings_data.pop("overrides_dummy", None)
         return input_settings_data
     
     def _cleanup_ark_data(self, ark_data):
+        ark_data.pop("name", None)
         ark_data.pop("is_current", None)
         ark_data.pop("index", None)
         
@@ -1547,9 +1541,9 @@ class AutoregKeymapPreset:
     def _fix_old_versions(self, data):
         if not isinstance(data, dict): return
         
-        universal_settings = data.get("settings")
-        if universal_settings:
-            self._cleanup_overrides(universal_settings)
+        default_settings = data.get("settings")
+        if default_settings:
+            self._cleanup_overrides(default_settings)
         
         keymaps = data.get("keymaps")
         if keymaps and isinstance(keymaps, (list, tuple)):
@@ -1557,8 +1551,8 @@ class AutoregKeymapPreset:
                 if not isinstance(keymap, dict): continue
                 self._cleanup_ark_data(keymap)
     
-    def _fill_defaults(self, ark_data, universal_settings_data):
-        if not universal_settings_data: return ark_data
+    def _fill_defaults(self, ark_data, default_settings_data):
+        if not default_settings_data: return ark_data
         
         ark_data = dict(ark_data)
         
@@ -1570,7 +1564,7 @@ class AutoregKeymapPreset:
         overrides = set()
         input_settings_data["overrides"] = overrides
         
-        for key, value in universal_settings_data.items():
+        for key, value in default_settings_data.items():
             if key in input_settings_data:
                 if key in names_set: overrides.add(key)
             else:
@@ -1581,9 +1575,6 @@ class AutoregKeymapPreset:
         return ark_data
     
     def apply(self, context):
-        wm = context.window_manager
-        userprefs = context.preferences
-        
         settings.use_default_keymap = False
         
         flips = self.data.get("flips", ())
@@ -1594,16 +1585,15 @@ class AutoregKeymapPreset:
         settings.flips.zoom_y = "zoom_y" in flips
         settings.flips.zoom_wheel = "zoom_wheel" in flips
         
-        settings.use_universal_input_settings = self.data.get("universal", True)
-        universal_settings_data = self.data.get("settings")
-        BlRna.reset(settings.universal_input_settings)
-        BlRna.deserialize(settings.universal_input_settings, universal_settings_data)
+        default_settings_data = self.data.get("settings")
+        BlRna.reset(settings.default_input_settings)
+        BlRna.deserialize(settings.default_input_settings, default_settings_data)
         
         while settings.autoreg_keymaps:
             settings.autoreg_keymaps.remove(0)
         
         for ark_data in self.data.get("keymaps", tuple()):
-            ark_data = self._fill_defaults(ark_data, universal_settings_data)
+            ark_data = self._fill_defaults(ark_data, default_settings_data)
             ark = settings.autoreg_keymaps.add()
             BlRna.deserialize(ark, ark_data)
             ark.index = len(settings.autoreg_keymaps)-1
@@ -2009,20 +1999,24 @@ class ThisAddonPreferences:
             return getattr(self, attr_name)
     
     def calc_zbrush_mode(self):
-        if self.is_using_universal_input_settings:
-            return (self.universal_input_settings.zbrush_mode != 'NONE')
+        if self.is_using_default_input_settings:
+            return (self.default_input_settings.zbrush_mode != 'NONE')
         return any((ark.input_settings.zbrush_mode != 'NONE') for ark in self.autoreg_keymaps)
     zbrush_mode: False | prop(get=calc_zbrush_mode)
     
     use_default_keymap: True | prop("Use default keymap", options={'HIDDEN'})
     autoreg_keymaps: [AutoRegKeymapInfo] | prop("Auto-registered keymaps", "Auto-registered keymaps")
     autoreg_keymap_id: 0 | prop("Keymap ID", "Keymap ID", min=0)
-    use_universal_input_settings: True | prop("Universal", "Use same settings for each keymap")
-    universal_input_settings: MouselookNavigation_InputSettings | prop()
+    show_default_input_settings: False | prop("Default", "Show the default settings for keymaps")
+    default_input_settings: MouselookNavigation_InputSettings | prop()
     
     @property
-    def is_using_universal_input_settings(self):
-        return self.use_universal_input_settings or (len(self.autoreg_keymaps) == 0)
+    def is_using_default_input_settings(self):
+        return (len(self.autoreg_keymaps) == 0)
+    
+    @property
+    def is_showing_default_input_settings(self):
+        return self.show_default_input_settings or self.is_using_default_input_settings
     
     zbrush_radius: 0 | prop("Geometry detection radius", "Minimal required distance (in pixels) to the nearest geometry", min=0, max=64, subtype='PIXEL')
     zbrush_method: 'ZBUFFER' | prop("Geometry detection method", "Which method to use to determine if mouse is over empty space", items=[
@@ -2158,7 +2152,7 @@ class ThisAddonPreferences:
                 layout.prop(self, "show_trackball", text="Show", icon='ORIENTATION_GIMBAL', toggle=True)
     
     def draw_autoreg_keymaps(self, context, layout):
-        is_using_universal_input_settings = self.is_using_universal_input_settings
+        is_showing_default_input_settings = self.is_showing_default_input_settings
         
         with layout.row(align=True):
             self.flips.draw(layout)
@@ -2175,7 +2169,7 @@ class ThisAddonPreferences:
                 with layout.box():
                     with layout.column(align=True):
                         with layout.row():
-                            icon = (('PROP_CON' if ark.is_current else 'PROP_ON') if not is_using_universal_input_settings else 'PROP_OFF')
+                            icon = (('PROP_CON' if ark.is_current else 'PROP_ON') if not is_showing_default_input_settings else 'PROP_OFF')
                             layout.prop(ark, "is_current", text="", icon=icon, icon_only=True, toggle=True, emboss=False)
                             
                             with layout.row(align=True):
@@ -2204,13 +2198,13 @@ class ThisAddonPreferences:
                             layout.prop(ark, "insert_before", text="")
         
         with layout.box():
-            if is_using_universal_input_settings:
-                input_settings = self.universal_input_settings
+            if is_showing_default_input_settings:
+                input_settings = self.default_input_settings
                 input_settings.draw(layout, None)
             else:
                 autoreg_keymap_id = min(self.autoreg_keymap_id, len(self.autoreg_keymaps)-1)
                 input_settings = self.autoreg_keymaps[autoreg_keymap_id].input_settings
-                input_settings.draw(layout, self.universal_input_settings)
+                input_settings.draw(layout, self.default_input_settings)
 
 def register():
     addon.register()

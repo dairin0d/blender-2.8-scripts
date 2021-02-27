@@ -13,7 +13,6 @@
                 "keymaps": [
                     "3D View"
                 ],
-                "name": "",
                 "oskey": false,
                 "shift": false,
                 "value_type": "MIDDLEMOUSE:PRESS:DOUBLE_CLICK"
@@ -29,7 +28,6 @@
                 "keymaps": [
                     "3D View"
                 ],
-                "name": "",
                 "oskey": false,
                 "shift": false,
                 "value_type": "MOUSEROTATE:ANY"
@@ -45,11 +43,10 @@
                 "keymaps": [
                     "3D View"
                 ],
-                "name": "",
                 "oskey": false,
                 "shift": false,
                 "value_type": "TRACKPADPAN:ANY"
-            },
+            }
         ],
         "settings": {
             "allowed_transitions": [
@@ -94,11 +91,9 @@
             "keys_x_only": "X:PRESS",
             "keys_y_only": "Y:PRESS",
             "keys_zoom": "ctrl:ON",
-            "name": "",
             "origin_mode": "PREFS",
             "ortho_unrotate": true,
             "zbrush_mode": "NONE"
-        },
-        "universal": true
+        }
     }
 }
