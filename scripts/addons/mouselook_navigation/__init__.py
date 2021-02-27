@@ -1822,7 +1822,8 @@ class ShortcutConfigKey:
             
             layout.prop(self, "remove", text="", icon='X')
 
-@addon.Operator(idname="mouselook_navigation.configure_shortcut_keys", label="Configure", description="Configure shortcut keys", options={'INTERNAL'})
+@addon.Operator(idname="mouselook_navigation.configure_shortcut_keys", label="Configure shortcut keys & events",
+    description="Configure shortcut keys & events", options={'INTERNAL'})
 class ConfigureShortcutKeys:
     config_keys: [ShortcutConfigKey] | prop()
     
