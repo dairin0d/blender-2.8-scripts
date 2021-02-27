@@ -18,7 +18,7 @@
                 "name": "",
                 "oskey": false,
                 "shift": false,
-                "value_type": "LEFTMOUSE:ANY"
+                "value_type": "LEFTMOUSE:PRESS"
             },
             {
                 "alt": true,
@@ -36,7 +36,7 @@
                 "name": "",
                 "oskey": false,
                 "shift": false,
-                "value_type": "MIDDLEMOUSE:ANY"
+                "value_type": "MIDDLEMOUSE:PRESS"
             },
             {
                 "alt": true,
@@ -54,7 +54,7 @@
                 "name": "",
                 "oskey": false,
                 "shift": false,
-                "value_type": "RIGHTMOUSE:ANY"
+                "value_type": "RIGHTMOUSE:PRESS"
             }
         ],
         "settings": {
@@ -77,33 +77,32 @@
             ],
             "default_mode": "ORBIT",
             "independent_modes": false,
-            "keys_fps_back": "S, Down Arrow",
-            "keys_fps_down": "Q, F, Page Down",
-            "keys_fps_forward": "W, Up Arrow",
-            "keys_fps_left": "A, Left Arrow",
-            "keys_fps_right": "D, Right Arrow",
-            "keys_fps_up": "E, R, Page Up",
-            "keys_cancel": "Esc",
-            "keys_confirm": "Ret, Numpad Enter",
+            "keys_cancel": "ESC:PRESS",
+            "keys_confirm": "RET:PRESS, NUMPAD_ENTER:PRESS",
             "keys_dolly": "",
-            "keys_fly": "{Invoke key}: Double click",
-            "keys_fps": "Tab: Press",
-            "keys_fps_acceleration": "Shift",
-            "keys_fps_crouch": "Ctrl",
-            "keys_fps_jump": "Space",
-            "keys_fps_slowdown": "Ctrl",
-            "keys_fps_teleport": "{Invoke key}, V",
-            "keys_orbit": "Left Mouse",
+            "keys_fly": "<INVOKE_KEY>:DOUBLE_CLICK",
+            "keys_fps": "TAB:PRESS",
+            "keys_fps_acceleration": "shift:ON",
+            "keys_fps_back": "S:ON, DOWN_ARROW:ON",
+            "keys_fps_crouch": "ctrl:ON",
+            "keys_fps_down": "Q:ON, F:ON, PAGE_DOWN:ON",
+            "keys_fps_forward": "W:ON, UP_ARROW:ON",
+            "keys_fps_jump": "SPACE:ON",
+            "keys_fps_left": "A:ON, LEFT_ARROW:ON",
+            "keys_fps_right": "D:ON, RIGHT_ARROW:ON",
+            "keys_fps_slowdown": "ctrl:ON",
+            "keys_fps_teleport": "<INVOKE_KEY>:PRESS, V:PRESS",
+            "keys_fps_up": "E:ON, R:ON, PAGE_UP:ON",
+            "keys_orbit": "LEFTMOUSE:ON",
             "keys_orbit_snap": "",
-            "keys_pan": "Middle Mouse",
-            "keys_rotmode_switch": "Space: Press",
-            "keys_x_only": "X: Press",
-            "keys_y_only": "Y: Press",
-            "keys_zoom": "Right Mouse",
+            "keys_pan": "MIDDLEMOUSE:ON",
+            "keys_rotmode_switch": "SPACE:PRESS",
+            "keys_x_only": "X:PRESS",
+            "keys_y_only": "Y:PRESS",
+            "keys_zoom": "RIGHTMOUSE:ON",
             "name": "",
             "origin_mode": "PREFS",
             "ortho_unrotate": true,
-            "overrides_dummy": false,
             "zbrush_mode": "NONE"
         },
         "universal": false

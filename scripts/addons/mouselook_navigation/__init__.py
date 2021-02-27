@@ -53,9 +53,10 @@ if "dairin0d" in locals(): importlib.reload(dairin0d)
 exec(("" if importlib.util.find_spec("dairin0d") else "from . ")+"import dairin0d")
 
 dairin0d.load(globals(), {
+    "utils_python": "get_or_add",
     "utils_blender": "ToggleObjectMode, BlUtil",
     "utils_view3d": "SmartView3D, RaycastResult",
-    "utils_userinput": "InputKeyParser, InputKeyMonitor, ModeStack, KeyMapUtils",
+    "utils_userinput": "InputKeyMonitor, ModeStack, KeyMapUtils",
     "utils_gl": "cgl",
     "utils_ui": "NestedLayout, BlUI",
     "bpy_inspect": "prop, BlRna, BlEnums",
@@ -172,31 +173,31 @@ class MouselookNavigation_InputSettings:
     
     ortho_unrotate: True | prop("Ortho unrotate", "In Ortho mode, rotation is abandoned if another mode is selected")
     
-    def _keyprop(name, default_keys, tooltip=""):
-        return default_keys | prop(name, tooltip or name)
-    keys_confirm: _keyprop("Confirm", "Ret, Numpad Enter, Left Mouse: Press")
-    keys_cancel: _keyprop("Cancel", "Esc, Right Mouse: Press")
-    keys_rotmode_switch: _keyprop("Trackball", "Space: Press", tooltip="Trackball on/off")
-    keys_orbit: _keyprop("Orbit", "") # main operator key (MMB) by default
-    keys_orbit_snap: _keyprop("Snap", "Alt", tooltip="Orbit Snap")
-    keys_pan: _keyprop("Pan", "Shift")
-    keys_dolly: _keyprop("Dolly", "")
-    keys_zoom: _keyprop("Zoom", "Ctrl")
-    keys_fly: _keyprop("Fly", "{Invoke key}: Double click")
-    keys_fps: _keyprop("Walk", "Tab: Press")
-    keys_fps_forward: _keyprop("FPS forward", "W, Up Arrow")
-    keys_fps_back: _keyprop("FPS back", "S, Down Arrow")
-    keys_fps_left: _keyprop("FPS left", "A, Left Arrow")
-    keys_fps_right: _keyprop("FPS right", "D, Right Arrow")
-    keys_fps_up: _keyprop("FPS up", "E, R, Page Up")
-    keys_fps_down: _keyprop("FPS down", "Q, F, Page Down")
-    keys_fps_acceleration: _keyprop("FPS fast", "Shift")
-    keys_fps_slowdown: _keyprop("FPS slow", "Ctrl")
-    keys_fps_crouch: _keyprop("FPS crouch", "Ctrl")
-    keys_fps_jump: _keyprop("FPS jump", "Space")
-    keys_fps_teleport: _keyprop("FPS teleport", "{Invoke key}, V")
-    keys_x_only: _keyprop("X only", "X: Press", tooltip="Toggle X-axis input")
-    keys_y_only: _keyprop("Y only", "Y: Press", tooltip="Toggle Y-axis input")
+    def _keyprop(name, tooltip=""):
+        return "" | prop(name, tooltip or name)
+    keys_confirm: _keyprop("Confirm")
+    keys_cancel: _keyprop("Cancel")
+    keys_rotmode_switch: _keyprop("Trackball", "Trackball on/off")
+    keys_orbit: _keyprop("Orbit") # main operator key (MMB) by default
+    keys_orbit_snap: _keyprop("Snap", "Orbit Snap")
+    keys_pan: _keyprop("Pan")
+    keys_dolly: _keyprop("Dolly")
+    keys_zoom: _keyprop("Zoom")
+    keys_fly: _keyprop("Fly")
+    keys_fps: _keyprop("Walk")
+    keys_fps_forward: _keyprop("FPS forward")
+    keys_fps_back: _keyprop("FPS back")
+    keys_fps_left: _keyprop("FPS left")
+    keys_fps_right: _keyprop("FPS right")
+    keys_fps_up: _keyprop("FPS up")
+    keys_fps_down: _keyprop("FPS down")
+    keys_fps_acceleration: _keyprop("FPS fast")
+    keys_fps_slowdown: _keyprop("FPS slow")
+    keys_fps_crouch: _keyprop("FPS crouch")
+    keys_fps_jump: _keyprop("FPS jump")
+    keys_fps_teleport: _keyprop("FPS teleport")
+    keys_x_only: _keyprop("X only", "Toggle X-axis input")
+    keys_y_only: _keyprop("Y only", "Toggle Y-axis input")
     
     # Must be a list to preserve enum order
     overrides_names = [
@@ -234,13 +235,12 @@ class MouselookNavigation_InputSettings:
     
     overrides: set() | prop("Override the default value", "", items=[(name, "") for name in overrides_names])
     
-    overrides_dummy: False | prop("Cannot override (you are currently editing the default setup)", "")
+    overrides_dummy: False | prop("Cannot override (you are currently editing the default setup)", "", options={'HIDDEN', 'SKIP_SAVE'})
     
     def draw(self, layout, main):
         is_main = main is None
         
         def draw_override(prop_name):
-            # UNLOCKED LOCKED UNPINNED PINNED UNLINKED LINKED
             icon = ('PINNED' if prop_name in self.overrides else 'UNPINNED')
             with layout.row(align=True)(enabled=(not is_main), emboss=('PULLDOWN_MENU' if is_main else 'NORMAL')):
                 if is_main:
@@ -250,9 +250,22 @@ class MouselookNavigation_InputSettings:
         
         def draw_prop(data, prop_name, is_key=False, **kwargs):
             if (not is_main) and (prop_name not in self.overrides): data = main
+            
             layout.active = is_main or (prop_name in self.overrides)
-            if is_key: layout.alert = not InputKeyParser.validate(getattr(data, prop_name), invoke_key='INVOKE_KEY')
-            layout.prop(data, prop_name, **kwargs)
+            
+            if is_key:
+                with layout.split(factor=0.35, align=True):
+                    button_prop = BlRna(data).properties[prop_name]
+                    layout.context_pointer_set("button_prop", button_prop)
+                    layout.context_pointer_set("button_pointer", data)
+                    
+                    kwargs.setdefault("text", button_prop.name)
+                    layout.label(**kwargs)
+                    
+                    label = ShortcutConfigUtility.get_shortcuts_label(getattr(data, prop_name), False)
+                    layout.operator(ConfigureShortcutKeys.bl_idname, text=label)
+            else:
+                layout.prop(data, prop_name, **kwargs)
         
         def draw_prop_with_override(data, prop_name, is_key=False, **kwargs):
             with layout.row(align=True):
@@ -260,12 +273,13 @@ class MouselookNavigation_InputSettings:
                     draw_prop(data, prop_name, is_key=is_key, **kwargs)
                 draw_override(prop_name)
         
-        with layout.split(factor=0.15):
-            with layout.column():
+        with layout.row():
+            with layout.column()(alignment='LEFT'):
                 with layout.row():
-                    layout.label(text="Transitions:")
+                    with layout.row()(scale_x=0.8):
+                        layout.label(text="Transitions:")
                     draw_override("allowed_transitions")
-                with layout.column():
+                with layout.column()(scale_x=0.4):
                     draw_prop(self, "allowed_transitions")
             
             with layout.column():
@@ -280,7 +294,7 @@ class MouselookNavigation_InputSettings:
                 layout.separator()
                 
                 with layout.row():
-                    with layout.column():
+                    with layout.column(align=True):
                         layout.label(text="Navigation shortcuts:")
                         draw_prop_with_override(self, "keys_confirm", is_key=True)
                         draw_prop_with_override(self, "keys_cancel", is_key=True)
@@ -294,7 +308,7 @@ class MouselookNavigation_InputSettings:
                         draw_prop_with_override(self, "keys_fps", is_key=True)
                         draw_prop_with_override(self, "keys_x_only", is_key=True)
                         draw_prop_with_override(self, "keys_y_only", is_key=True)
-                    with layout.column():
+                    with layout.column(align=True):
                         layout.label(text="FPS mode shortcuts:")
                         draw_prop_with_override(self, "keys_fps_forward", text="Forward", is_key=True)
                         draw_prop_with_override(self, "keys_fps_back", text="Back", is_key=True)
@@ -329,34 +343,34 @@ class MouselookNavigation:
             use_universal = (input_settings is None) or (name not in input_settings.overrides)
             return getattr(universal_input_settings if use_universal else input_settings, name)
         
-        self.keys_invoke = self.km.keychecker(event.type)
+        self.keys_invoke = self.key_monitor.keychecker(event.type)
         if event.value in {'RELEASE', 'CLICK'}:
-            self.keys_invoke_confirm = self.km.keychecker(event.type+":PRESS")
+            self.keys_invoke_confirm = self.key_monitor.keychecker(event.type+":PRESS")
         else:
-            self.keys_invoke_confirm = self.km.keychecker(event.type+":RELEASE")
-        self.keys_confirm = self.km.keychecker(get_value("keys_confirm"))
-        self.keys_cancel = self.km.keychecker(get_value("keys_cancel"))
-        self.keys_rotmode_switch = self.km.keychecker(get_value("keys_rotmode_switch"))
-        self.keys_orbit = self.km.keychecker(get_value("keys_orbit"))
-        self.keys_orbit_snap = self.km.keychecker(get_value("keys_orbit_snap"))
-        self.keys_pan = self.km.keychecker(get_value("keys_pan"))
-        self.keys_dolly = self.km.keychecker(get_value("keys_dolly"))
-        self.keys_zoom = self.km.keychecker(get_value("keys_zoom"))
-        self.keys_fly = self.km.keychecker(get_value("keys_fly"))
-        self.keys_fps = self.km.keychecker(get_value("keys_fps"))
-        self.keys_fps_forward = self.km.keychecker(get_value("keys_fps_forward"))
-        self.keys_fps_back = self.km.keychecker(get_value("keys_fps_back"))
-        self.keys_fps_left = self.km.keychecker(get_value("keys_fps_left"))
-        self.keys_fps_right = self.km.keychecker(get_value("keys_fps_right"))
-        self.keys_fps_up = self.km.keychecker(get_value("keys_fps_up"))
-        self.keys_fps_down = self.km.keychecker(get_value("keys_fps_down"))
-        self.keys_fps_acceleration = self.km.keychecker(get_value("keys_fps_acceleration"))
-        self.keys_fps_slowdown = self.km.keychecker(get_value("keys_fps_slowdown"))
-        self.keys_fps_crouch = self.km.keychecker(get_value("keys_fps_crouch"))
-        self.keys_fps_jump = self.km.keychecker(get_value("keys_fps_jump"))
-        self.keys_fps_teleport = self.km.keychecker(get_value("keys_fps_teleport"))
-        self.keys_x_only = self.km.keychecker(get_value("keys_x_only"))
-        self.keys_y_only = self.km.keychecker(get_value("keys_y_only"))
+            self.keys_invoke_confirm = self.key_monitor.keychecker(event.type+":RELEASE")
+        self.keys_confirm = self.key_monitor.keychecker(get_value("keys_confirm"))
+        self.keys_cancel = self.key_monitor.keychecker(get_value("keys_cancel"))
+        self.keys_rotmode_switch = self.key_monitor.keychecker(get_value("keys_rotmode_switch"))
+        self.keys_orbit = self.key_monitor.keychecker(get_value("keys_orbit"))
+        self.keys_orbit_snap = self.key_monitor.keychecker(get_value("keys_orbit_snap"))
+        self.keys_pan = self.key_monitor.keychecker(get_value("keys_pan"))
+        self.keys_dolly = self.key_monitor.keychecker(get_value("keys_dolly"))
+        self.keys_zoom = self.key_monitor.keychecker(get_value("keys_zoom"))
+        self.keys_fly = self.key_monitor.keychecker(get_value("keys_fly"))
+        self.keys_fps = self.key_monitor.keychecker(get_value("keys_fps"))
+        self.keys_fps_forward = self.key_monitor.keychecker(get_value("keys_fps_forward"))
+        self.keys_fps_back = self.key_monitor.keychecker(get_value("keys_fps_back"))
+        self.keys_fps_left = self.key_monitor.keychecker(get_value("keys_fps_left"))
+        self.keys_fps_right = self.key_monitor.keychecker(get_value("keys_fps_right"))
+        self.keys_fps_up = self.key_monitor.keychecker(get_value("keys_fps_up"))
+        self.keys_fps_down = self.key_monitor.keychecker(get_value("keys_fps_down"))
+        self.keys_fps_acceleration = self.key_monitor.keychecker(get_value("keys_fps_acceleration"))
+        self.keys_fps_slowdown = self.key_monitor.keychecker(get_value("keys_fps_slowdown"))
+        self.keys_fps_crouch = self.key_monitor.keychecker(get_value("keys_fps_crouch"))
+        self.keys_fps_jump = self.key_monitor.keychecker(get_value("keys_fps_jump"))
+        self.keys_fps_teleport = self.key_monitor.keychecker(get_value("keys_fps_teleport"))
+        self.keys_x_only = self.key_monitor.keychecker(get_value("keys_x_only"))
+        self.keys_y_only = self.key_monitor.keychecker(get_value("keys_y_only"))
     
     @classmethod
     def poll(cls, context):
@@ -402,7 +416,7 @@ class MouselookNavigation:
         view_height = walk_prefs.view_height
         jump_height = walk_prefs.jump_height
         
-        self.km.update(event)
+        self.key_monitor.update(event)
         
         prev_mode = self.mode_stack.mode
         self.mode_stack.update()
@@ -980,7 +994,7 @@ class MouselookNavigation:
         
         self.zbrush_border = settings.calc_zbrush_border_size(self.sv.area, self.sv.region)
         
-        self.km = InputKeyMonitor(event)
+        self.key_monitor = InputKeyMonitor(event)
         self.create_keycheckers(event, input_settings, universal_input_settings)
         mouse_prev = Vector((event.mouse_prev_x, event.mouse_prev_y))
         mouse = Vector((event.mouse_x, event.mouse_y))
@@ -1382,62 +1396,56 @@ def update_keymaps(activate=True):
     
     KeyMapUtils.remove(idname)
     
-    if activate:
-        # Attention: userprefs.addons[__name__] may not exist during unregistration
-        context = bpy.context
-        wm = context.window_manager
+    # Attention: userprefs.addons[__name__] may not exist during unregistration
+    if not activate: return
+    
+    context = bpy.context
+    wm = context.window_manager
+    
+    #keymaps = wm.keyconfigs.addon.keymaps
+    
+    # For a specific operator, the same (exact clones) keymap items may need to be
+    # inserted into keymaps of several modes (depending on what conflicts may arise).
+    # Since we need mouselook operator to have higher priority than default navigation,
+    # but lower priority than 3D manipulator, we have to put it into the user keymaps
+    # (because only user keymaps actually store user modifications).
+    # User may still want to have several mouselook shortcuts in one mode, e.g. if (s)he
+    # wants standard Blender control scheme (mouse to orbit/pan/zoom, Shift+F to fly/walk)
+    keymaps = wm.keyconfigs.user.keymaps
+    
+    # Note: I use ANY event by default, because otherwise the Fly-mode's default
+    # "{Invoke key}: Double click" shortcut won't work (or we'd need multiple keymaps)
+    
+    if len(settings.autoreg_keymaps) == 0 and settings.use_default_keymap:
+        default_preset = AutoregKeymapPreset.presets.get("Blender")
+        if default_preset:
+            error = default_preset.apply(context)
+            if error: print(error)
+    
+    kmi_to_insert = {}
+    
+    for ark_id, ark in enumerate(settings.autoreg_keymaps):
+        insert_before = set(v.strip() for v in ark.insert_before.split(","))
+        insert_before.discard("")
+        insert_after = set(v.strip() for v in ark.insert_after.split(","))
+        insert_after.discard("")
         
-        #keymaps = wm.keyconfigs.addon.keymaps
-        
-        # For a specific operator, the same (exact clones) keymap items may need to be
-        # inserted into keymaps of several modes (depending on what conflicts may arise).
-        # Since we need mouselook operator to have higher priority than default navigation,
-        # but lower priority than 3D manipulator, we have to put it into the user keymaps
-        # (because only user keymaps actually store user modifications).
-        # User may still want to have several mouselook shortcuts in one mode, e.g. if (s)he
-        # wants standard Blender control scheme (mouse to orbit/pan/zoom, Shift+F to fly/walk)
-        keymaps = wm.keyconfigs.user.keymaps
-        
-        # Note: I use ANY event by default, because otherwise the Fly-mode's default
-        # "{Invoke key}: Double click" shortcut won't work (or we'd need multiple keymaps)
-        
-        if len(settings.autoreg_keymaps) == 0 and settings.use_default_keymap:
-            default_preset = AutoregKeymapPreset.presets.get("Blender")
-            if default_preset:
-                error = default_preset.apply(context)
-                if error: self.report({'ERROR'}, error)
-        
-        key_monitor = InputKeyMonitor()
-        
-        kmi_to_insert = {}
-        
-        for ark_id, ark in enumerate(settings.autoreg_keymaps):
-            insert_before = set(v.strip() for v in ark.insert_before.split(","))
-            insert_before.discard("")
-            insert_after = set(v.strip() for v in ark.insert_after.split(","))
-            insert_after.discard("")
+        for mode_name in ark.keymaps:
+            kmi_datas = kmi_to_insert.setdefault(mode_name, [])
             
-            for mode_name in ark.keymaps:
-                kmi_datas = kmi_to_insert.setdefault(mode_name, [])
-                
-                value_type = ark.value_type
-                if ":" not in value_type: value_type += ": Press"
-                
-                for key in key_monitor.parse_keys(value_type):
-                    if key.startswith("!"): continue
-                    key_type, key_value = key.split(":")
-                    kmi_data = dict(idname=idname, type=key_type, value=key_value,
-                        any=ark.any, shift=ark.shift, ctrl=ark.ctrl, alt=ark.alt,
-                        oskey=ark.oskey, key_modifier=ark.key_modifier,
-                        properties=dict(input_settings_id=ark_id))
-                    kmi_datas.append((insert_after, kmi_data, insert_before))
-        
-        for keymap_name, kmi_datas in kmi_to_insert.items():
-            try:
-                km = keymaps[keymap_name] # expected to exist in user keymaps
-            except:
-                continue
-            KeyMapUtils.insert(km, kmi_datas)
+            for key_info in InputKeyMonitor.get_keys(ark.value_type):
+                kmi_data = dict(idname=idname, type=key_info.key, value=key_info.event,
+                    any=ark.any, shift=ark.shift, ctrl=ark.ctrl, alt=ark.alt,
+                    oskey=ark.oskey, key_modifier=ark.key_modifier,
+                    properties=dict(input_settings_id=ark_id))
+                kmi_datas.append((insert_after, kmi_data, insert_before))
+    
+    for keymap_name, kmi_datas in kmi_to_insert.items():
+        try:
+            km = keymaps[keymap_name] # expected to exist in user keymaps
+        except:
+            continue
+        KeyMapUtils.insert(km, kmi_datas)
 
 @addon.PropertyGroup
 class AutoRegKeymapInfo:
@@ -1517,6 +1525,7 @@ class AutoregKeymapPreset:
     
     def _cleanup_overrides(self, input_settings_data):
         input_settings_data.pop("overrides", None)
+        input_settings_data.pop("overrides_dummy", None)
         return input_settings_data
     
     def _cleanup_ark_data(self, ark_data):
@@ -1727,33 +1736,156 @@ def reset_property(self, context):
 def context_menu_draw(self, context):
     layout = self.layout
     
-    if ConfigureShortcutKeys.poll(context):
+    if ConfigureShortcutKeys.can_invoke(context):
         layout.separator()
-        layout.operator("mouselook_navigation.configure_shortcut_keys")
+        layout.operator(ConfigureShortcutKeys.bl_idname)
+
+class ShortcutConfigUtility:
+    type_items = [
+        ('KEY', "Key / Button", "A specific key or button\n(click the input field to enter a key)"),
+        ('shift', "Shift", "Any Shift key"),
+        ('ctrl', "Ctrl", "Any Ctrl key"),
+        ('alt', "Alt", "Any Alt key"),
+        ('oskey', "Cmd", "Any Command (OS) key"),
+        ('<INVOKE_KEY>', "Invoke Key", "The key with which the operator was invoked"),
+    ]
+    type_map = {item[0]:item[1] for item in type_items}
+    
+    key_items = [(item.identifier, item.name, item.description, item.icon, item.value)
+                 for item in bpy.types.KeyMapItem.bl_rna.properties["type"].enum_items]
+    key_map = {item[0]:item[1] for item in key_items}
+    
+    events_modal_items = [
+        ('PRESS', "Press", "Toggle on/off when the button is pressed"),
+        ('RELEASE', "Release", "Toggle on/off when the button is released"),
+        ('CLICK', "Click", "Toggle on/off when the button is clicked"),
+        ('DOUBLE_CLICK', "Double Click", "Toggle on/off when the button is double-clicked"),
+        ('CLICK_DRAG', "Click Drag", "Toggle on/off when the button is clicked+dragged"),
+        ('ON', "Held", "Active while the button is held"),
+        ('OFF', "Not Held", "Active while the button is not held"),
+    ]
+    events_modal_map = {item[0]:item[1] for item in events_modal_items}
+    events_modal_indices = {item[0]:i for i, item in enumerate(events_modal_items)}
+    
+    events_keymap_items = [(item.identifier, item.name, item.description)
+        for item in bpy.types.KeyMapItem.bl_rna.properties["value"].enum_items if item.identifier != 'NOTHING']
+    events_keymap_map = {item[0]:item[1] for item in events_keymap_items}
+    events_keymap_indices = {item[0]:i for i, item in enumerate(events_keymap_items)}
+    
+    @classmethod
+    def is_valid(cls, type, key, events):
+        return ((type != 'KEY') or (key != 'NONE')) and bool(events)
+    
+    @classmethod
+    def get_events(cls, name, is_keymap):
+        category = ("keymap" if is_keymap else "modal")
+        return getattr(cls, f"events_{category}_{name}")
+    
+    @classmethod
+    def get_events_label(cls, events, is_keymap, ignored="Ignored"):
+        events_map = cls.get_events("map", is_keymap)
+        events_indices = cls.get_events("indices", is_keymap)
+        items = {(events_indices[event], events_map[event]) for event in events if event in events_map}
+        return " or ".join(item[1] for item in sorted(items)) or ignored
+    
+    @classmethod
+    def get_shortcuts_label(cls, shortcuts, is_keymap):
+        groups = {}
+        
+        for key, events in InputKeyMonitor.parse(shortcuts):
+            if key in cls.key_map:
+                key_name = cls.key_map[key]
+            elif (not is_keymap) and (key in cls.type_map):
+                key_name = cls.type_map[key]
+            else:
+                continue
+            
+            events_label = cls.get_events_label(events, is_keymap, ignored=None)
+            if not events_label: continue
+            
+            get_or_add(groups, events_label, list).append(key_name)
+        
+        result = []
+        for events_label in sorted(groups.keys()):
+            group_str = ", ".join(groups[events_label])
+            result.append(f"{group_str} ({events_label})")
+        
+        return "; ".join(result)
 
 @addon.PropertyGroup
 class ShortcutConfigKey:
-    invert: False | prop("Invert", "Trigger the shortcut when this key/event combination is NOT active")
-    raw: "" | prop()
-    key: 'NONE' | prop(items=[(item.identifier, item.name, item.description, item.icon, item.value)
-                       for item in bpy.types.KeyMapItem.bl_rna.properties["type"].enum_items])
-    modifier: "-" | prop(items=([("-", "-", "Not a modifier")] +
-        [(k, InputKeyParser.names[k]) for k in InputKeyParser.modifiers.keys()]))
-
-@addon.PropertyGroup
-class ShortcutConfigEvent:
-    event: 'NOTHING' | prop(items=[(item.identifier, item.name, item.description, item.icon, item.value)
-        for item in bpy.types.KeyMapItem.bl_rna.properties["value"].enum_items])
+    is_keymap: False | prop()
+    
+    type: 'KEY' | prop("Type", "Type of shortcut", items=ShortcutConfigUtility.type_items)
+    key: 'NONE' | prop("Key / Button", "Click to enter a key", items=ShortcutConfigUtility.key_items)
+    events_modal: set() | prop("Events", "Which events trigger the action", items=ShortcutConfigUtility.events_modal_items)
+    events_keymap: set() | prop("Events", "Which events trigger the shortcut", items=ShortcutConfigUtility.events_keymap_items)
+    
+    remove: False | prop("Remove", "Remove this shortcut")
+    
+    # Note: without a setter, Blender displays the property greyed-out (and shows a warning in the tooltip)
+    shortcut_type_label: False | prop("Type", "Type of shortcut", get=(lambda self: False), set=(lambda self, value: None))
+    
+    @property
+    def events_prop(self):
+        return ("events_keymap" if self.is_keymap else "events_modal")
+    
+    @property
+    def events(self):
+        return getattr(self, self.events_prop)
+    @events.setter
+    def events(self, value):
+        setattr(self, self.events_prop, value)
+    
+    @property
+    def events_label(self):
+        return ShortcutConfigUtility.get_events_label(self.events, self.is_keymap)
+    
+    @property
+    def is_valid(self):
+        return ShortcutConfigUtility.is_valid(self.type, self.key, self.events)
+    
+    @property
+    def is_default(self):
+        return (self.type == 'KEY') and (self.key == 'NONE') and (not self.events)
+    
+    @property
+    def shortcut(self):
+        key = (self.key if self.type == 'KEY' else self.type)
+        events_indices = ShortcutConfigUtility.get_events("indices", self.is_keymap)
+        return ":".join([key] + sorted(self.events, key=(lambda event: events_indices[event])))
+    
+    def reset(self):
+        self.property_unset("type")
+        self.property_unset("key")
+        self.property_unset("events_modal")
+        self.property_unset("events_keymap")
+        self.property_unset("remove")
+    
+    def draw(self, layout, active=True):
+        layout = NestedLayout(layout)
+        
+        with layout.row(align=True)(active=active):
+            with layout.row(align=True)(enabled=(not self.is_keymap)):
+                layout.prop_menu_enum(self, "type", text="", icon='TRIA_DOWN')
+            
+            if self.type == 'KEY':
+                layout.prop(self, "key", text="", event=True)
+            else:
+                type_label = ShortcutConfigUtility.type_map[self.type]
+                layout.prop(self, "shortcut_type_label", text=f"({type_label})", toggle=True)
+            
+            layout.prop_menu_enum(self, self.events_prop, text=self.events_label)
+            
+            layout.prop(self, "remove", text="", icon='X')
 
 @addon.Operator(idname="mouselook_navigation.configure_shortcut_keys", label="Configure", description="Configure shortcut keys", options={'INTERNAL'})
 class ConfigureShortcutKeys:
-    keys: [ShortcutConfigKey] | prop()
-    events: [ShortcutConfigEvent] | prop()
+    config_keys: [ShortcutConfigKey] | prop()
     
-    modes_map = {"value_type": 'KEYMAP', "key_modifier": 'MODIFIER'}
-    
+    # We can't actually name this poll(), since execute() won't be called due to poll() returning False
     @classmethod
-    def poll(cls, context):
+    def can_invoke(cls, context):
         button_prop = getattr(context, "button_prop", None)
         if button_prop is None: return False
         prop_id = getattr(button_prop, "identifier", None)
@@ -1761,58 +1893,94 @@ class ConfigureShortcutKeys:
         
         button_pointer = getattr(context, "button_pointer", None)
         if isinstance(button_pointer, AutoRegKeymapInfo):
-            return button_prop.identifier in ("value_type", "key_modifier")
+            return button_prop.identifier == "value_type"
         elif isinstance(button_pointer, MouselookNavigation_InputSettings):
             return button_prop.identifier.startswith("keys_")
         return False
     
+    def get_enum_ids(self, prop_name, exclude=()):
+        enum_items = BlRna(ShortcutConfigKey).properties[prop_name].enum_items
+        return {item.identifier: item.name for item in enum_items if item not in exclude}
+    
+    def add(self):
+        config_key = self.config_keys.add()
+        config_key.is_keymap = self.is_keymap
+        return config_key
+    
+    def ensure_empty_end(self):
+        count = len(self.config_keys)
+        if count == 0:
+            self.add()
+        elif not self.config_keys[count - 1].is_default:
+            self.add()
+    
     def invoke(self, context, event):
+        if not self.can_invoke(context): return {'CANCELLED'}
+        
+        self.config_keys.clear()
+        
         button_pointer = context.button_pointer
         prop_id = context.button_prop.identifier
         
-        self.invoke_key = ('INVOKE_KEY' if prop_id.startswith("keys_") else "")
-        self.mode = self.modes_map.get(prop_id, 'SHORTCUT')
-        key_infos, event_infos = InputKeyParser.parse(getattr(button_pointer, prop_id), self.invoke_key)
+        self.button_pointer = button_pointer
+        self.prop_id = prop_id
         
-        for key_info in key_infos:
-            config_key = self.keys.add()
-            config_key.invert = key_info.invert
-            config_key.raw = key_info.raw
-            if key_info.type == 'EVENT_TYPE':
-                config_key.key = key_info.normalized
-            elif key_info.type == 'MODIFIER':
-                config_key.modifier = key_info.normalized
+        self.is_keymap = (prop_id == "value_type")
         
-        for event_info in event_infos:
-            config_event = self.events.add()
-            config_event.event = event_info.normalized or 'NOTHING'
+        self.events_prop = ("events_keymap" if self.is_keymap else "events_modal")
+        self.known_types = self.get_enum_ids("type", exclude={'KEY'})
+        self.known_events = self.get_enum_ids(self.events_prop)
+        self.known_keys = self.get_enum_ids("key")
+        
+        for key, events in InputKeyMonitor.parse(getattr(button_pointer, prop_id)):
+            if key in self.known_keys:
+                key_type = 'KEY'
+            elif (not self.is_keymap) and (key in self.known_types):
+                key_type, key = key, 'NONE'
+            else:
+                continue
+            
+            events = {event for event in events if event in self.known_events}
+            
+            if not ShortcutConfigUtility.is_valid(key_type, key, events): continue
+            
+            config_key = self.add()
+            config_key.key = key
+            config_key.type = key_type
+            config_key.events = events
+        
+        self.ensure_empty_end()
         
         return context.window_manager.invoke_props_dialog(self)
     
     def execute(self, context):
         # Make sure we proceed only if invoke() was called earlier
-        if not getattr(self, "mode", None): return {'CANCELLED'}
-        
+        if not hasattr(self, "button_pointer"): return {'CANCELLED'}
+        value = ", ".join(config_key.shortcut for config_key in self.config_keys if config_key.is_valid)
+        print(value)
+        setattr(self.button_pointer, self.prop_id, value)
+        BlUI.tag_redraw()
         return {'FINISHED'}
     
     def check(self, context):
-        # TODO: return if the UI should be updated
+        for i in range(len(self.config_keys)-1, -1, -1):
+            if not self.config_keys[i].remove: continue
+            if len(self.config_keys) > 1:
+                self.config_keys.remove(i)
+            else:
+                self.config_keys[i].reset()
+        
+        self.ensure_empty_end()
+        
         return False
     
     def draw(self, context):
-        layout = self.layout
+        layout = NestedLayout(self.layout)
         
-        #if self.mode == 'MODIFIER':
-        
-        for config_key in self.keys:
-            row = layout.row(align=True)
-            row.prop(config_key, "invert", text="", icon='REMOVE', toggle=True)
-            row.prop(config_key, "raw", text="")
-            row.prop(config_key, "key", text="", event=True)
-            row.prop(config_key, "modifier", text="")
-        
-        for config_event in self.events:
-            layout.prop(config_event, "event")
+        with layout.column(align=True):
+            imax = len(self.config_keys) - 1
+            for i, config_key in enumerate(self.config_keys):
+                config_key.draw(layout, active=(i < imax))
 
 @addon.PropertyGroup
 class NavigationDirectionFlip:
@@ -2052,22 +2220,30 @@ class ThisAddonPreferences:
         
         with layout.column(align=True):
             autoreg_keymaps = self.autoreg_keymaps
+            
             for i, ark in enumerate(autoreg_keymaps):
                 with layout.box():
                     with layout.column(align=True):
                         with layout.row():
                             icon = (('PROP_CON' if ark.is_current else 'PROP_ON') if not is_using_universal_input_settings else 'PROP_OFF')
                             layout.prop(ark, "is_current", text="", icon=icon, icon_only=True, toggle=True, emboss=False)
+                            
                             with layout.row(align=True):
                                 with layout.row()(alignment='LEFT'):
                                     layout.context_pointer_set("autoreg_keymap", ark)
                                     layout.popover(KeymapModifiersPanel.bl_idname, text=KeymapModifiersPanel.get_label(ark))
+                                
                                 layout.label(icon='ADD')
-                                with layout.row():
-                                    layout.alert = not InputKeyParser.validate(ark.value_type, can_invert=False)
-                                    layout.prop(ark, "value_type", text="")
+                                
+                                with layout.row(align=True):
+                                    value_type_prop = BlRna(ark).properties["value_type"]
+                                    layout.context_pointer_set("button_prop", value_type_prop)
+                                    layout.context_pointer_set("button_pointer", ark)
+                                    layout.operator(ConfigureShortcutKeys.bl_idname, text=ShortcutConfigUtility.get_shortcuts_label(ark.value_type, True))
+                            
                             with layout.row()(alignment='LEFT'):
                                 layout.prop_menu_enum(ark, "keymaps", text="Keymaps")
+                            
                             layout.operator("mouselook_navigation.autoreg_keymap_remove", text="", icon='X').index = i
                         
                         layout.separator(factor=0.5)

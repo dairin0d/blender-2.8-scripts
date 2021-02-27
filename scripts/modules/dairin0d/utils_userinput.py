@@ -24,110 +24,7 @@ import bpy
 from .utils_python import reverse_enumerate
 from .bpy_inspect import BlRna
 
-_all_modifiers = {'alt':"Alt", 'ctrl':"Ctrl", 'oskey':"OS Key", 'shift':"Shift"}
-
-def _make_key_map(prop_name):
-    enum_items = bpy.types.Event.bl_rna.properties[prop_name].enum_items
-    return {name.replace(" ", "_").upper(): item.identifier for item in enum_items
-            for name in (item.identifier, item.name) if name and name[0].isalnum()}
-
-def _make_name_map():
-    result = {}
-    
-    def get_name(item):
-        if item.name.isalnum(): return item.name
-        return item.identifier.replace("_", " ").capitalize()
-    
-    for item in bpy.types.Event.bl_rna.properties["type"].enum_items:
-        result[item.identifier] = get_name(item)
-    
-    for item in bpy.types.Event.bl_rna.properties["value"].enum_items:
-        result[item.identifier] = get_name(item)
-    
-    for identifier, name in _all_modifiers.items():
-        result[identifier] = name
-    
-    return result
-
-class InputKeyParser:
-    invoke_key = "{INVOKEKEY}"
-    keys = _make_key_map("type")
-    events = _make_key_map("value")
-    modifiers = {identifier:identifier for identifier in _all_modifiers.keys()}
-    names = _make_name_map()
-    
-    KeyInfo = namedtuple("KeyInfo", ["type", "raw", "normalized", "invert"])
-    
-    @classmethod
-    def normalize(cls, key, keyset, invoke_key=""):
-        if isinstance(keyset, str):
-            if keyset in ("keys", "events"):
-                key = key.upper()
-            elif keyset == "modifiers":
-                key = key.lower()
-            else:
-                raise RuntimeError(f"Unsupported keyset attribute: {keyset}")
-            keyset = getattr(cls, keyset)
-        
-        elements = key.replace("-", " ").split()
-        combined0 = "".join(elements)
-        combined1 = "_".join(elements)
-        
-        if invoke_key and (combined0 == cls.invoke_key): return invoke_key
-        
-        return keyset.get(combined0) or keyset.get(combined1) or ""
-    
-    @classmethod
-    def parse(cls, keys_string, invoke_key=""):
-        parts = [part.strip() for part in keys_string.split(":")]
-        
-        key_infos = []
-        for key in (parts[0].split(",") if parts[0] else ()):
-            key = key.strip()
-            
-            is_negative = key.startswith("!")
-            if is_negative: key = key[1:].strip()
-            
-            event_type_normalized = cls.normalize(key, "keys", invoke_key)
-            if event_type_normalized:
-                key_infos.append(cls.KeyInfo('EVENT_TYPE', key, event_type_normalized, is_negative))
-                continue
-            
-            modifier_normalized = cls.normalize(key, "modifiers")
-            if modifier_normalized:
-                key_infos.append(cls.KeyInfo('MODIFIER', key, modifier_normalized, is_negative))
-                continue
-            
-            key_infos.append(cls.KeyInfo('UNKNOWN', key, "", is_negative))
-        
-        event_infos = []
-        for event_value in parts[1:]:
-            event_value_normalized = cls.normalize(event_value, "events")
-            if event_value_normalized or (not event_value):
-                event_infos.append(cls.KeyInfo('EVENT_VALUE', event_value, event_value_normalized, False))
-            else:
-                event_infos.append(cls.KeyInfo('UNKNOWN', event_value, "", False))
-        
-        return key_infos, event_infos
-    
-    @classmethod
-    def validate(cls, keys_string, invoke_key="", can_invert=True):
-        key_infos, event_infos = cls.parse(keys_string, invoke_key)
-        
-        for event_info in event_infos:
-            if event_info.type == 'UNKNOWN': return False
-        
-        for key_info in key_infos:
-            if key_info.type == 'UNKNOWN': return False
-            if (not can_invert) and key_info.invert: return False
-        
-        return True
-
 class InputKeyMonitor:
-    all_keys = InputKeyParser.keys
-    all_events = InputKeyParser.events
-    all_modifiers = InputKeyParser.modifiers
-    
     def __init__(self, event=None):
         self.event = ""
         self.prev_states = {}
@@ -142,9 +39,14 @@ class InputKeyMonitor:
             self.update(event)
     
     def __getitem__(self, name):
-        if name.startswith("!"): return not self[name[1:]]
-        if ":" in name: return self.event == name
-        return self.states.setdefault(name, False)
+        if name.endswith(":ON"):
+            return self.states.setdefault(name, False)
+        elif name.endswith(":OFF"):
+            return not self.states.setdefault(name, False)
+        elif ":" not in name:
+            return self.states.setdefault(name, False)
+        else:
+            return self.event == name
     
     def __setitem__(self, name, state):
         self.states[name] = state
@@ -166,119 +68,117 @@ class InputKeyMonitor:
         
         self.event = event.type+":"+event.value
     
-    def keychecker(self, keys, default_state=False):
-        keys = self.parse_keys(keys)
+    def keychecker(self, shortcut, default_state=False):
+        key_infos = self.get_keys(shortcut, self.invoke_key)
+        state_infos = [info for info in key_infos if info.event in self._state_events]
+        event_infos = [info for info in key_infos if info.event not in self._state_events]
         
-        events_set = {key for key in keys if ":" in key}
+        events_set = {info.full for info in event_infos}
         event_state = {"state": default_state, "counter": self.update_counter}
         
-        def get_event_toggle(key):
-            invert = key.startswith("!")
-            if invert: key = key[1:]
-            return self.event == key
+        def get_event_toggle(info):
+            return self.event == info.full
         
-        def get_state_toggle(key, mask_pos, mask_neg):
-            invert = key.startswith("!")
-            if invert: key = key[1:]
-            state0 = int(self.prev_states.get(key, False))
-            state1 = int(self.states.get(key, False))
+        def get_state_toggle(info, mask_pos, mask_neg):
+            state0 = int(self.prev_states.get(info.key, False))
+            state1 = int(self.states.get(info.key, False))
             delta = state1 - state0
-            if invert: delta = -delta
+            if info.invert: delta = -delta
             return ((delta & mask_pos) > 0) or ((delta & mask_neg) < 0)
         
-        def get_event_on(key):
-            invert = key.startswith("!")
-            if invert: key = key[1:]
+        def get_event_on(info):
             return event_state["state"]
         
-        def get_state_on(key):
-            invert = key.startswith("!")
-            if invert: key = key[1:]
-            return self.states.get(key, False) != invert
+        def get_state_on(info):
+            return self.states.get(info.key, False) != info.invert
         
-        def check(mode=None):
+        def check(mode):
             if (self.event in events_set) and (self.update_counter != event_state["counter"]):
                 event_state["state"] = not event_state["state"]
                 event_state["counter"] = self.update_counter
             
-            if mode is None: return any(self[key] for key in keys) # old logic
-            
             if mode == 'ON|TOGGLE':
-                for key in keys:
-                    if (":" not in key) and get_state_on(key): return 'ON'
-                for key in keys:
-                    if (":" in key) and get_event_toggle(key): return 'TOGGLE'
+                for info in state_infos:
+                    if get_state_on(info): return 'ON'
+                for info in event_infos:
+                    if get_event_toggle(info): return 'TOGGLE'
                 return None
             elif mode in {'TOGGLE', 'PRESS', 'RELEASE'}:
                 mask_pos = (0 if mode == 'RELEASE' else -1)
                 mask_neg = (0 if mode == 'PRESS' else -1)
-                for key in keys:
-                    if ":" in key:
-                        if get_event_toggle(key): return True
-                    else:
-                        if get_state_toggle(key, mask_pos, mask_neg): return True
+                for info in state_infos:
+                    if get_state_toggle(info, mask_pos, mask_neg): return True
+                for info in event_infos:
+                    if get_event_toggle(info): return True
                 return False
             elif mode in {'ON', 'OFF'}:
                 invert = (mode == 'OFF')
-                for key in keys:
-                    if ":" in key:
-                        state = get_event_on(key)
-                    else:
-                        state = get_state_on(key)
-                    if state != invert: return True
+                for info in state_infos:
+                    if get_state_on(info) != invert: return True
+                for info in event_infos:
+                    if get_event_on(info) != invert: return True
                 return False
-        
-        check.is_event = ((":" in keys[0]) if keys else False)
         
         return check
     
-    def combine_key_parts(self, key, keyset, use_invoke_key=False):
-        elements = key.split()
-        combined0 = "".join(elements)
-        combined1 = "_".join(elements)
-        
-        if use_invoke_key and (combined0 == "{INVOKEKEY}"):
-            return self.invoke_key
-        
-        return keyset.get(combined0) or keyset.get(combined1) or ""
+    class KeyInfo:
+        __slots__ = ["full", "key", "event", "is_state", "invert"]
+        def __init__(self, full):
+            self.full = full
+            self.key, self.event = full.split(":")
+            self.is_state = (self.event == 'ON') or (self.event == 'OFF')
+            self.invert = (self.event == 'OFF')
     
-    def parse_keys(self, keys_string):
-        parts = keys_string.split(":")
-        keys_string = parts[0]
+    _invoke_key = '<INVOKE_KEY>'
+    _modifier_keys = {'shift', 'ctrl', 'alt', 'oskey'}
+    _variant_modifiers = {'shift', 'ctrl', 'alt'}
+    _variant_prefixes = ["LEFT_", "RIGHT_", "NDOF_BUTTON_"]
+    _state_events = {'ON', 'OFF'}
+    _keymap_keys = {item.identifier for item in bpy.types.KeyMapItem.bl_rna.properties["type"].enum_items} - {'NONE'}
+    _keymap_events = {item.identifier for item in bpy.types.KeyMapItem.bl_rna.properties["value"].enum_items} - {'NOTHING'}
+    _all_keys = _keymap_keys | _modifier_keys
+    _all_events = _keymap_events | _state_events
+    
+    @classmethod
+    def _iterate_key_variants(cls, key, events, invoke_key=None):
+        if key == cls._invoke_key: key = invoke_key
         
-        event_id = ""
-        if len(parts) > 1:
-            event_id = self.combine_key_parts(parts[1].upper(), self.all_events)
-            if event_id: event_id = ":"+event_id
+        if key not in cls._all_keys: return
         
-        keys = []
-        for key in keys_string.split(","):
-            key = key.strip()
-            
-            is_negative = key.startswith("!")
-            prefix = ""
-            if is_negative:
-                key = key[1:]
-                prefix = "!"
-            
-            key_id = self.combine_key_parts(key.upper(), self.all_keys, True)
-            modifier_id = self.combine_key_parts(key.lower(), self.all_modifiers)
-            
-            if key_id:
-                keys.append(prefix+key_id+event_id)
-            elif modifier_id:
-                if len(event_id) != 0:
-                    modifier_id = modifier_id.upper()
-                    if modifier_id == 'OSKEY': # has no left/right/ndof variants
-                        keys.append(prefix+modifier_id+event_id)
-                    else:
-                        keys.append(prefix+"LEFT_"+modifier_id+event_id)
-                        keys.append(prefix+"RIGHT_"+modifier_id+event_id)
-                        keys.append(prefix+"NDOF_BUTTON_"+modifier_id+event_id)
-                else:
-                    keys.append(prefix+modifier_id)
+        is_keymap = not invoke_key
         
-        return keys
+        all_events = (cls._keymap_events if is_keymap else cls._all_events)
+        
+        is_modifier = (key in cls._modifier_keys)
+        is_variant_modifier = (key in cls._variant_modifiers)
+        key_upper = key.upper()
+        
+        for event in events:
+            if event not in all_events: continue
+            
+            if is_variant_modifier and (is_keymap or (event not in cls._state_events)):
+                for prefix in cls._variant_prefixes:
+                    yield f"{prefix}{key_upper}:{event}"
+            elif is_keymap and is_modifier:
+                yield f"{key_upper}:{event}"
+            else:
+                yield f"{key}:{event}"
+    
+    @classmethod
+    def get_keys(cls, shortcut, invoke_key=None):
+        if isinstance(shortcut, str): shortcut = cls.parse(shortcut)
+        return [cls.KeyInfo(variant) for key, events in shortcut
+                for variant in cls._iterate_key_variants(key, events, invoke_key)]
+    
+    @classmethod
+    def parse(cls, shortcut):
+        result = []
+        
+        for part in shortcut.split(","):
+            subparts = [subpart.strip() for subpart in part.split(":")]
+            result.append((subparts[0], set(subparts[1:])))
+        
+        return result
 
 class ModeStack:
     def __init__(self, keys, transitions, default_mode, mode=None, search_direction=-1):
