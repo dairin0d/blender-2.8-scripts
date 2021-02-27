@@ -1380,12 +1380,12 @@ def background_timer_update():
 # Importantly, for this to be possible, we have to put them into a known category:
 # https://blender.stackexchange.com/questions/70697/how-to-allow-setting-hotkey-in-add-on
 
-@addon.Operator.execute(idname="mouselook_navigation.toggle_enabled", label="Enable/disable Mouselook Navigation")
+@addon.Operator.execute(idname="mouselook_navigation.toggle_enabled", label="Toggle Mouselook Navigation", description="Enable/disable Mouselook Navigation")
 def VIEW3D_OT_mouselook_navigation_toggle_enabled(self, context):
     settings.is_enabled = not settings.is_enabled
     BlUI.tag_redraw()
 
-@addon.Operator.execute(idname="mouselook_navigation.toggle_trackball", label="Use Trackball orbiting method")
+@addon.Operator.execute(idname="mouselook_navigation.toggle_trackball", label="Use Trackball", description="Use Trackball orbiting method")
 def VIEW3D_OT_mouselook_navigation_toggle_trackball(self, context):
     settings.is_trackball = not settings.is_trackball
     BlUI.tag_redraw()
@@ -1611,59 +1611,12 @@ class AutoregKeymapPreset:
         
         update_keymaps()
 
-@addon.Panel(idname="VIEW3D_PT_mouselook_navigation", space_type='VIEW_3D', region_type='UI', label="Mouselook Navigation", category="View")
-class VIEW3D_PT_mouselook_navigation:
-    @classmethod
-    def poll(cls, context):
-        return addon.settings.show_in_shelf
-    
-    def draw_header(self, context):
-        self.layout.operator("mouselook_navigation.toggle_enabled", text="",
-            icon=('CHECKBOX_HLT' if settings.is_enabled else 'CHECKBOX_DEHLT'), emboss=False)
-    
-    def draw(self, context):
-        layout = NestedLayout(self.layout)
-        
-        with layout.row():
-            layout.label(text="Show/hide:")
-            layout.prop(*settings("show_trackball"), text="", icon='ORIENTATION_GIMBAL')
-            with layout.row(align=True):
-                layout.prop(*settings("show_crosshair"), text="", icon='ADD')
-                with layout.row(align=True)(active=settings.show_crosshair):
-                    layout.prop(*settings("show_focus"), text="", icon='LIGHT_HEMI')
-                layout.prop(*settings("show_zbrush_border"), text="", icon='SELECT_SET')
-        
-        with layout.column(align=True):
-            layout.prop(*settings("zoom_speed_modifier"))
-            layout.prop(*settings("rotation_speed_modifier"))
-            layout.prop(*settings("fps_speed_modifier"))
-        
-        layout.prop(*settings("fps_horizontal"))
-        layout.prop(*settings("zoom_to_selection"))
-        
-        with layout.box():
-            with layout.row():
-                layout.label(text="Orbit snap")
-                layout.prop(*settings("rotation_snap_autoperspective"), text="To Ortho", toggle=True)
-            layout.prop(*settings("rotation_snap_subdivs"), text="Subdivs")
-        
-        with layout.box():
-            with layout.row():
-                layout.label(text="Trackball")
-                layout.prop(*settings("trackball_mode"), text="")
-            with layout.row(align=True):
-                layout.prop(*settings("autolevel_trackball"), text="Autolevel", toggle=True)
-                with layout.row(align=True)(active=settings.autolevel_trackball):
-                    layout.prop(*settings("autolevel_trackball_up"), text="Up", toggle=True)
-        
-        layout.prop(*settings("autolevel_speed_modifier"))
-
 @addon.Panel(idname="VIEW3D_PT_mouselook_navigation_header_popover", label="Mouselook Navigation", space_type='CONSOLE', region_type='WINDOW')
 class VIEW3D_PT_mouselook_navigation_header_popover:
     def draw(self, context):
         layout = self.layout
         layout.label(text="Mouselook Navigation")
-        VIEW3D_PT_mouselook_navigation.draw(self, context)
+        # Maybe this will come in handy at some point, to show some quick navigation settings or something
 
 @addon.ui_draw("VIEW3D_HT_header", 'APPEND')
 def draw_view3d_header(self, context):
@@ -1676,7 +1629,7 @@ def draw_view3d_header(self, context):
             row.operator("mouselook_navigation.toggle_trackball", text="", icon='ORIENTATION_GIMBAL', depress=settings.is_trackball)
         
         row.operator("mouselook_navigation.toggle_enabled", text="", icon='VIEW3D', depress=settings.is_enabled)
-        row.popover("VIEW3D_PT_mouselook_navigation_header_popover", text="")
+        # row.popover("VIEW3D_PT_mouselook_navigation_header_popover", text="")
 
 @addon.Panel(idname="VIEW3D_PT_mouselook_navigation_keymap_modifiers_popover", label="Modifiers", space_type='CONSOLE', region_type='WINDOW')
 class KeymapModifiersPanel:
@@ -2012,7 +1965,6 @@ class ThisAddonPreferences:
         ('ABOUT', "About", "About"),
     ])
     
-    show_in_shelf: True | prop("Show in shelf", f"Show a panel in the 3D view's shelf ('View' tab)")
     show_in_header: True | prop("Show in header", f"Show an icon in the 3D view's header")
     
     pass_through: False | prop("Non-blocking", "Other operators can be used while navigating")
@@ -2104,10 +2056,10 @@ class ThisAddonPreferences:
         value = ('TRACKBALL' if value else 'TURNTABLE')
         input_prefs = bpy.context.preferences.inputs
         if input_prefs.view_rotate_method != value: input_prefs.view_rotate_method = value
-    show_trackball: False | prop("Show the trackball/turntable switch", "Display a trackball/turntable indicator in the header")
+    show_trackball: False | prop("Show the trackball / turntable switch", "Display a trackball / turntable indicator in the header")
     is_trackball: False | prop("Use Trackball orbit", "Use the Trackball orbiting method", get=_is_trackball_get, set=_is_trackball_set)
     
-    auto_trackball: False | prop("Auto Trackball/Turntable", "Enable automatic switching between Trackball and Turntable in certain object modes")
+    auto_trackball: False | prop("Auto Trackball / Turntable", "Enable automatic switching between Trackball and Turntable in certain object modes")
     auto_trackball_modes: {} | prop("Auto Trackball modes", "In which object modes to use Trackball",
         items=[(mode_name, BlEnums.get_mode_name(mode_name), "") for mode_name in sorted(BlEnums.context_modes)])
     
@@ -2139,10 +2091,8 @@ class ThisAddonPreferences:
         with layout.box():
             with layout.row():
                 layout.label(text="UI:")
-                with layout.row()(alignment='RIGHT'):
-                    layout.prop(self, "show_in_shelf", toggle=True)
-                    layout.prop(self, "show_in_header", toggle=True)
-                    layout.prop(self, "use_blender_colors", toggle=True)
+                layout.prop(self, "show_in_header", toggle=True)
+                layout.prop(self, "use_blender_colors", toggle=True)
             
             with layout.row():
                 with layout.box():
@@ -2205,7 +2155,7 @@ class ThisAddonPreferences:
                 with layout.row(align=True)(alignment='RIGHT'):
                     layout.prop(self, "auto_trackball", text="Auto switch", toggle=True)
                     layout.prop_menu_enum(self, "auto_trackball_modes", text="", icon='TRIA_DOWN')
-                layout.prop(self, "show_trackball", text="", icon='HIDE_OFF', toggle=True)
+                layout.prop(self, "show_trackball", text="Show", icon='ORIENTATION_GIMBAL', toggle=True)
     
     def draw_autoreg_keymaps(self, context, layout):
         is_using_universal_input_settings = self.is_using_universal_input_settings
