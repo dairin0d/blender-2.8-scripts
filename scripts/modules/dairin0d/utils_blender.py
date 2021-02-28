@@ -2591,5 +2591,74 @@ class BpyPath:
                 prev, axis = curr, new_axis
         
         return [(file_path, indices[axis], count) for file_path, indices, axis, count in results]
+    
+    @staticmethod
+    def properties(obj, raw=None, no_readonly=False, names=False):
+        # Inspired by BKE_bpath_traverse_id(...) in source\blender\blenkernel\intern\bpath.c
+        
+        if (not obj) or (not hasattr(obj, "bl_rna")): return
+        
+        if no_readonly and isinstance(obj, bpy.types.ID) and obj.library: return
+        
+        rna_props = obj.bl_rna.properties
+        
+        for p in rna_props:
+            if not BpyPath.is_path_property(p): continue
+            if p.is_readonly and no_readonly: continue
+            
+            if raw is None:
+                yield obj, (p.identifier if names else p)
+            elif p.identifier.endswith("_raw"):
+                if raw: yield obj, (p.identifier if names else p)
+            elif (not raw) or (p.identifier+"_raw" not in rna_props):
+                yield obj, (p.identifier if names else p)
+        
+        point_cache = getattr(obj, "point_cache", None)
+        if isinstance(point_cache, bpy.types.PointCache):
+            yield from BpyPath.properties(point_cache, raw, no_readonly, names)
+        
+        if isinstance(obj, bpy.types.Object):
+            for modifier in obj.modifiers:
+                yield from BpyPath.properties(modifier, raw, no_readonly, names)
+            for particle_system in obj.particle_systems:
+                yield from BpyPath.properties(particle_system, raw, no_readonly, names)
+        elif isinstance(obj, bpy.types.Modifier):
+            if obj.type == 'FLUID': # Blender >= 2.82
+                yield from BpyPath.properties(obj.domain_settings, raw, no_readonly, names)
+            elif obj.type == 'FLUID_SIMULATION': # Blender < 2.82
+                yield from BpyPath.properties(obj.settings, raw, no_readonly, names)
+            elif obj.type == 'SMOKE': # Blender < 2.82
+                yield from BpyPath.properties(obj.domain_settings, raw, no_readonly, names)
+        elif isinstance(obj, bpy.types.PointCache):
+            for point_cache_item in obj.point_caches:
+                yield from BpyPath.properties(point_cache_item, raw, no_readonly, names)
+        elif isinstance(obj, bpy.types.Material):
+            yield from BpyPath.properties(obj.node_tree, raw, no_readonly, names)
+        elif isinstance(obj, bpy.types.NodeTree):
+            for node in obj.nodes:
+                yield from BpyPath.properties(node, raw, no_readonly, names)
+        elif isinstance(obj, bpy.types.Scene):
+            yield from BpyPath.properties(obj.rigidbody_world, raw, no_readonly, names)
+            yield from BpyPath.properties(obj.sequence_editor, raw, no_readonly, names)
+        elif isinstance(obj, bpy.types.SequenceEditor):
+            for sequence in obj.sequences_all:
+                yield from BpyPath.properties(sequence, raw, no_readonly, names)
+        elif isinstance(obj, bpy.types.Sequence):
+            # Not all sequence subtypes have proxy or elements
+            yield from BpyPath.properties(getattr(obj, "proxy", None), raw, no_readonly, names)
+            for element in getattr(obj, "elements", ()):
+                yield from BpyPath.properties(element, raw, no_readonly, names)
+    
+    path_property_subtypes = {'FILE_PATH', 'DIR_PATH', 'FILE_NAME'}
+    @staticmethod
+    def is_path_property(p):
+        if p.type != 'STRING': return False
+        if p.subtype in BpyPath.path_property_subtypes: return True
+        # Not all file/dir path-like properties are marked with a subtype
+        p_id_low = p.identifier.lower()
+        conditionA = ("file" in p_id_low) or ("dir" in p_id_low) or ("cache" in p_id_low)
+        conditionB = ("path" in p_id_low) or ("name" in p_id_low) or ("proxy" in p_id_low)
+        conditionC = ("directory" in p_id_low)
+        return (conditionA and conditionB) or conditionC
 
 BpyPath.operator_presets_dir = BpyPath.join(bpy.utils.resource_path('USER'), "scripts", "presets", "operator")
