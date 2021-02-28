@@ -1108,7 +1108,6 @@ class SmartView3D:
                 
                 if success:
                     polygon = baked_obj.data.polygons[index]
-                    #tessface = baked_obj.data.tessfaces[index] # this will error if tessfaces are not calculated
                     
                     if midpoints: location, normal = Vector(polygon.center), Vector(polygon.normal)
                     

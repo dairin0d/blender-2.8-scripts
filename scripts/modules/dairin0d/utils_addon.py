@@ -958,7 +958,8 @@ class AddonManager:
         # seem to match this pattern (have bl_idname property)
         for name in dir(bpy.types):
             bpy_type = getattr(bpy.types, name)
-            rna = bpy_type.bl_rna
+            rna = getattr(bpy_type, "bl_rna", None)
+            if rna is None: continue
             if rna.base: continue # this is a derived type
             if "bl_idname" not in rna.properties: continue
             bl_attrs = [p.identifier[3:] for p in rna.properties

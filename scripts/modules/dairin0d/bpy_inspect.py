@@ -133,9 +133,15 @@ class BlRna:
         bpy_args = dict(name=rna_prop.name, description=rna_prop.description, options=set())
         def map_arg(rna_name, bpy_name, is_option=False):
             if is_option:
-                if getattr(rna_prop, rna_name, False): bpy_args["options"].add(bpy_name)
+                if getattr(rna_prop, rna_name, False):
+                    bpy_args["options"].add(bpy_name)
             else:
-                if hasattr(rna_prop, rna_name): bpy_args[bpy_name] = BlRna.serialize_value(getattr(rna_prop, rna_name), False)
+                # Some built-in enum properties may have incorrectly specified RNA, leading to
+                # warnings like "pyrna_enum_to_py: current value ... matches no enum in ..."
+                # The best we can do is merely to minimize the number of such warnings.
+                value = getattr(rna_prop, rna_name, BlRna) # any invalid default will do
+                if value is not BlRna:
+                    bpy_args[bpy_name] = BlRna.serialize_value(value, False)
         
         def fix_enum_default():
             # Some built-in properties may have invalid defaults.
@@ -145,8 +151,11 @@ class BlRna:
             item_keys = {item[0] for item in items}
             value = bpy_args["default"]
             if isinstance(value, str):
+                # Some built-in properties may not even have items (e.g.
+                # "sort_method" in the built-in importers/exporters) :-(
                 if value not in item_keys:
-                    bpy_args["default"] = items[0][0]
+                    # For no-items enums, default=None seems to not cause errors
+                    bpy_args["default"] = (items[0][0] if items else None)
             else:
                 bpy_args["default"] = {key for key in value if key in item_keys}
         
