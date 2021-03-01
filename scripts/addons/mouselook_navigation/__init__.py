@@ -1034,7 +1034,7 @@ class MouselookNavigation:
         use_raycast = (not ignore_raycast) and (self.use_origin_mouse or (self.zbrush_mode != 'NONE'))
         
         # If a mesh has face data, Blender will automatically disable dyntopo on re-entering sculpt mode
-        if is_sculpt and use_raycast:
+        if is_sculpt and use_raycast and (settings.zbrush_method != 'ZBUFFER'):
             is_dyntopo = context.object.use_dynamic_topology_sculpting
             if is_dyntopo: bpy.ops.sculpt.dynamic_topology_toggle()
         
