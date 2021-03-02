@@ -33,82 +33,25 @@ dairin0d.load(globals(), {
 })
 
 def calc_selection_center(context, non_obj_zero=False): # View3D area is assumed
-    context_mode = context.mode
+    cursor = context.scene.cursor
+    
+    # Note: view3d.snap_cursor_to_selected() (or, rather, its poll() method)
+    # requires space type to be VIEW_3D and window/screen/area to not be null
+    cursor_location_old = Vector(cursor.location)
+    op_result = bpy.ops.view3d.snap_cursor_to_selected()
+    cursor_location_new = Vector(cursor.location)
+    cursor.location = cursor_location_old
+    
+    success = ('FINISHED' in op_result) and all(math.isfinite(axis) for axis in cursor_location_new)
+    if success: return cursor_location_new
+    
     active_object = context.active_object
-    m = (active_object.matrix_world if active_object else None)
-    positions = []
+    is_object_mode = (context.mode == 'OBJECT') or (not active_object)
     
-    is_object_mode = (context_mode == 'OBJECT') or (not active_object)
+    if non_obj_zero and (not is_object_mode):
+        return active_object.matrix_world @ Vector()
     
-    if is_object_mode:
-        m = None
-        positions.extend(obj.matrix_world.translation for obj in context.selected_objects)
-    elif context_mode == 'EDIT_MESH':
-        bm = bmesh.from_edit_mesh(active_object.data)
-        if bm.select_history and (len(bm.select_history) < len(bm.verts)/4):
-            verts = set()
-            for elem in bm.select_history:
-                if isinstance(elem, bmesh.types.BMVert):
-                    verts.add(elem)
-                else:
-                    verts.update(elem.verts)
-            positions.extend(v.co for v in verts)
-        else:
-            positions.extend(v.co for v in bm.verts if v.select)
-    elif context_mode in {'EDIT_CURVE', 'EDIT_SURFACE'}:
-        for spline in active_object.data.splines:
-            for point in spline.bezier_points:
-                if point.select_control_point:
-                    positions.append(point.co)
-                else:
-                    if point.select_left_handle:
-                        positions.append(point.handle_left)
-                    if point.select_right_handle:
-                        positions.append(point.handle_right)
-            positions.extend(point.co.to_3d() for point in spline.points if point.select)
-    elif context_mode == 'EDIT_METABALL':
-        active_elem = active_object.data.elements.active
-        if active_elem:
-            positions.append(active_elem.co)
-        # Currently there is no API for element.select
-        #positions.extend(elem.co for elem in active_object.data.elements if elem.select)
-    elif context_mode == 'EDIT_LATTICE':
-        # Not point.co! point.co returns very strange and often very big numbers
-        positions.extend(point.co_deform for point in active_object.data.points if point.select)
-    elif context_mode == 'EDIT_ARMATURE':
-        for bone in active_object.data.edit_bones:
-            if bone.select_head:
-                positions.append(bone.head)
-            if bone.select_tail:
-                positions.append(bone.tail)
-    elif context_mode == 'POSE':
-        # consider only topmost parents
-        bones = set(bone for bone in active_object.data.bones if bone.select)
-        parents = set(bone for bone in bones if not bones.intersection(bone.parent_recursive))
-        positions.extend(bone.matrix_local.translation for bone in parents)
-    elif context_mode == 'EDIT_TEXT':
-        # Blender considers only caret position as the selection center
-        # But TextCurve has no API for text edit mode
-        positions.append(Vector()) # use active object's position
-    elif context_mode == 'PARTICLE':
-        positions.append(Vector()) # use active object's position
-    elif context_mode in {'SCULPT', 'PAINT_WEIGHT', 'PAINT_VERTEX', 'PAINT_TEXTURE'}:
-        # last stroke position? (at least in sculpt mode, when Rotate Around Selection
-        # is enabled, the view rotates around the average/center of last stroke)
-        # This information is not available in Python, though
-        positions.append(Vector()) # use active object's position
-    
-    n_positions = len(positions)
-    
-    if n_positions == 0:
-        if (not is_object_mode) and non_obj_zero:
-            return m @ Vector()
-        return None
-    
-    if m is not None:
-        positions = (m @ p for p in positions)
-    
-    return sum(positions, Vector()) * (1.0 / n_positions)
+    return None
 
 # Virtual Trackball by Gavin Bell
 # Ok, simulate a track-ball.  Project the points onto the virtual
