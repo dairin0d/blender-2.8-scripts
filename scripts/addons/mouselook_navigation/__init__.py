@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 6, 1),
+    "version": (1, 6, 2),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -165,8 +165,8 @@ class MouselookNavigation_InputSettings:
     ])
     
     origin_mode: 'PREFS' | prop("Orbit origin", "What to use as the orbit origin", items=[
-        ('PREFS', "Origin: Auto", "Determine orbit origin from Blender's input preferences"),
-        ('VIEW', "Origin: View", "Use 3D View's orbit center"),
+        ('PREFS', "Origin: Auto", "Determine orbit origin from Blender's preferences"),
+        ('VIEW', "Origin: View", "Use 3D View's focus point"),
         ('MOUSE', "Origin: Mouse", "Orbit around the point under the mouse"),
         ('SELECTION', "Origin: Selection", "Orbit around the selection pivot"),
     ])
@@ -196,8 +196,8 @@ class MouselookNavigation_InputSettings:
     keys_fps_crouch: _keyprop("FPS crouch")
     keys_fps_jump: _keyprop("FPS jump")
     keys_fps_teleport: _keyprop("FPS teleport")
-    keys_x_only: _keyprop("X only", "Toggle X-axis input")
-    keys_y_only: _keyprop("Y only", "Toggle Y-axis input")
+    keys_x_only: _keyprop("X only")
+    keys_y_only: _keyprop("Y only")
     
     # Must be a list to preserve enum order
     overrides_names = [
@@ -248,7 +248,7 @@ class MouselookNavigation_InputSettings:
                 else:
                     layout.prop_enum(self, "overrides", prop_name, text="", icon=icon)
         
-        def draw_prop(data, prop_name, is_key=False, **kwargs):
+        def draw_prop(data, prop_name, is_key=False, func="prop", **kwargs):
             if (not is_main) and (prop_name not in self.overrides): data = main
             
             layout.active = is_main or (prop_name in self.overrides)
@@ -265,12 +265,13 @@ class MouselookNavigation_InputSettings:
                     label = ShortcutConfigUtility.get_shortcuts_label(getattr(data, prop_name), False)
                     layout.operator(ConfigureShortcutKeys.bl_idname, text=label)
             else:
-                layout.prop(data, prop_name, **kwargs)
+                if isinstance(func, str): func = getattr(layout, func)
+                func(data, prop_name, **kwargs)
         
-        def draw_prop_with_override(data, prop_name, is_key=False, **kwargs):
+        def draw_prop_with_override(data, prop_name, is_key=False, func="prop", **kwargs):
             with layout.row(align=True):
                 with layout.row(align=True):
-                    draw_prop(data, prop_name, is_key=is_key, **kwargs)
+                    draw_prop(data, prop_name, is_key=is_key, func=func, **kwargs)
                 draw_override(prop_name)
         
         with layout.row():
@@ -279,8 +280,8 @@ class MouselookNavigation_InputSettings:
                     with layout.row()(scale_x=0.8):
                         layout.label(text="Transitions:")
                     draw_override("allowed_transitions")
-                with layout.column()(scale_x=0.4):
-                    draw_prop(self, "allowed_transitions")
+                with layout.column(align=True)(scale_x=0.4):
+                    draw_prop(self, "allowed_transitions", func="prop_enum_filtered")
             
             with layout.column():
                 with layout.row():
@@ -350,7 +351,7 @@ class MouselookNavigation:
             self.keys_invoke_confirm = self.key_monitor.keychecker(event.type+":RELEASE")
         self.keys_confirm = self.key_monitor.keychecker(get_value("keys_confirm"))
         self.keys_cancel = self.key_monitor.keychecker(get_value("keys_cancel"))
-        self.keys_rotmode_switch = self.key_monitor.keychecker(get_value("keys_rotmode_switch"))
+        self.keys_rotmode_switch = self.key_monitor.keychecker(get_value("keys_rotmode_switch"), settings.is_trackball)
         self.keys_orbit = self.key_monitor.keychecker(get_value("keys_orbit"))
         self.keys_orbit_snap = self.key_monitor.keychecker(get_value("keys_orbit_snap"))
         self.keys_pan = self.key_monitor.keychecker(get_value("keys_pan"))
@@ -396,7 +397,6 @@ class MouselookNavigation:
         drag_threshold = userprefs.inputs.drag_threshold
         move_threshold = userprefs.inputs.move_threshold
         mouse_double_click_time = userprefs.inputs.mouse_double_click_time / 1000.0
-        rotate_method = userprefs.inputs.view_rotate_method
         invert_mouse_zoom = userprefs.inputs.invert_mouse_zoom
         invert_wheel_zoom = userprefs.inputs.invert_zoom_wheel
         use_zoom_to_mouse = userprefs.inputs.use_zoom_to_mouse
@@ -434,6 +434,8 @@ class MouselookNavigation:
         elif self.input_axis_stack.mode == 'X':
             mouse_delta[1] = 0.0
         
+        self.is_trackball = settings.is_trackball
+        
         if self.independent_modes and (mode != prev_mode) and (mode not in {'FLY', 'FPS'}):
             mode_state = self.modes_state[mode]
             self.sv.is_perspective = mode_state[0]
@@ -442,7 +444,7 @@ class MouselookNavigation:
             self.sv.focus = self.pos
             self.rot = mode_state[3].copy()
             self.euler = mode_state[4].copy()
-            if rotate_method == 'TURNTABLE':
+            if not self.is_trackball:
                 self.sv.turntable_euler = self.euler # for turntable
             else:
                 self.sv.rotation = self.rot # for trackball
@@ -526,7 +528,7 @@ class MouselookNavigation:
                         use_gravity = True
                         walk_prefs.use_gravity = use_gravity
                     
-                    rotate_method = 'TURNTABLE'
+                    self.is_trackball = False
                     min_speed_autolevel = 30 * dt
                     speed_autolevel = max(speed_autolevel, min_speed_autolevel)
                     
@@ -556,17 +558,13 @@ class MouselookNavigation:
                         self.fly_speed = Vector()
                         mode = 'PAN'
                 
-                self.rotate_method = rotate_method # used for FPS horizontal
-                
                 if (event.type == 'MOUSEMOVE') or (event.type == 'INBETWEEN_MOUSEMOVE'):
                     if mode == 'ORBIT':
-                        if rotate_method == 'TURNTABLE':
+                        if not self.is_trackball:
                             self.change_euler(mouse_delta.y * speed_euler.y, mouse_delta.x * speed_euler.x, 0)
                         else: # 'TRACKBALL'
-                            if flips.orbit_x:
-                                mouse_delta.x *= -1
-                            if flips.orbit_y:
-                                mouse_delta.y *= -1
+                            if flips.orbit_x: mouse_delta.x *= -1
+                            if flips.orbit_y: mouse_delta.y *= -1
                             self.change_rot_mouse(mouse_delta, mouse, speed_rot, trackball_mode)
                         self.sync_view_orientation(False)
                     elif mode == 'PAN':
@@ -585,10 +583,9 @@ class MouselookNavigation:
             confirm |= self.keys_invoke_confirm('PRESS')
             
             if self.sv.can_move:
-                if self.keys_rotmode_switch('ON') != (rotate_method == 'TRACKBALL'):
-                    rotate_method = ('TURNTABLE' if rotate_method == 'TRACKBALL' else 'TRACKBALL')
-                    userprefs.inputs.view_rotate_method = rotate_method
-                self.rotate_method = rotate_method # used for FPS horizontal
+                if self.keys_rotmode_switch('ON') != self.is_trackball:
+                    self.is_trackball = not self.is_trackball
+                    settings.is_trackball = self.is_trackball
                 
                 is_orbit_snap = self.keys_orbit_snap('ON')
                 delta_orbit_snap = int(is_orbit_snap) - int(self.prev_orbit_snap)
@@ -606,12 +603,12 @@ class MouselookNavigation:
                         if mode in ('PAN', 'DOLLY', 'ZOOM'):
                             # forbid transitions back to orbit
                             self.mode_stack.remove_transitions({'ORBIT:PAN', 'ORBIT:DOLLY', 'ORBIT:ZOOM'})
-                            self.reset_rotation(rotate_method, use_auto_perspective)
+                            self.reset_rotation(self.is_trackball, use_auto_perspective)
                 
                 if (event.type == 'MOUSEMOVE') or (event.type == 'INBETWEEN_MOUSEMOVE'):
                     if mode == 'ORBIT':
                         # snapping trackball rotation is problematic (I don't know how to do it)
-                        if (rotate_method == 'TURNTABLE') or is_orbit_snap:
+                        if (not self.is_trackball) or is_orbit_snap:
                             self.change_euler(mouse_delta.y * speed_euler.y, mouse_delta.x * speed_euler.x, 0)
                         else: # 'TRACKBALL'
                             if flips.orbit_x:
@@ -652,7 +649,7 @@ class MouselookNavigation:
             if self.sv.can_move:
                 if speed_autolevel > 0:
                     if (not is_orbit_snap) or (mode != 'ORBIT'):
-                        if rotate_method == 'TURNTABLE':
+                        if not self.is_trackball:
                             self.change_euler(0, 0, speed_autolevel, False)
                         elif self.autolevel_trackball:
                             speed_autolevel *= 1.0 - abs(self.sv.forward.z)
@@ -824,7 +821,7 @@ class MouselookNavigation:
     def abs_fps_speed(self, dx, dy, dz, speed=1.0, use_gravity=False):
         xdir, ydir, zdir = self.sv.right, self.sv.forward, self.sv.up
         fps_horizontal = (self.fps_horizontal or use_gravity) and self.sv.is_perspective
-        if (self.rotate_method == 'TURNTABLE') and fps_horizontal:
+        if (not self.is_trackball) and fps_horizontal:
             ysign = (-1.0 if zdir.z < 0 else 1.0)
             zdir = Vector((0, 0, 1))
             ydir = Quaternion(zdir, self.euler.z) @ Vector((0, 1, 0))
@@ -852,10 +849,10 @@ class MouselookNavigation:
             pd = (self.sv.right * pd_x) + (self.sv.forward * pd_y)
         return pd
     
-    def reset_rotation(self, rotate_method, use_auto_perspective):
+    def reset_rotation(self, is_trackball, use_auto_perspective):
         self.rot = self.rot0.copy()
         self.euler = self.euler0.copy()
-        if rotate_method == 'TURNTABLE':
+        if not is_trackball:
             self.sv.turntable_euler = self.euler # for turntable
         else:
             self.sv.rotation = self.rot # for trackball
@@ -1101,6 +1098,7 @@ class MouselookNavigation:
         
         self.fps_horizontal = settings.fps_horizontal
         self.trackball_mode = settings.trackball_mode
+        self.is_trackball = settings.is_trackball
         self.fps_speed_modifier = settings.fps_speed_modifier
         self.zoom_speed_modifier = settings.zoom_speed_modifier
         self.rotation_snap_subdivs = settings.rotation_snap_subdivs
@@ -1958,7 +1956,7 @@ class ThisAddonPreferences:
         ('ABOUT', "About", "About"),
     ])
     
-    show_in_header: True | prop("Show in header", f"Show an icon in the 3D view's header")
+    show_in_header: True | prop("Show in header", f"Show Mouselook Navigation icons in the 3D view's header")
     
     pass_through: False | prop("Non-blocking", "Other operators can be used while navigating")
     
@@ -1976,7 +1974,7 @@ class ThisAddonPreferences:
         "delays when starting or ending the navigation")
     
     show_crosshair: True | prop("Show Crosshair", "Crosshair visibility")
-    show_focus: True | prop("Show Orbit Center", "Orbit Center visibility")
+    show_focus: True | prop("Show Focus Point", "Focus Point visibility")
     show_zbrush_border: True | prop("Show ZBrush border", "ZBrush border visibility")
     use_blender_colors: True | prop("Use Blender's colors", "Use Blender's colors")
     color_crosshair_visible: Color() | prop("Crosshair (visible)", "Crosshair (visible) color")
@@ -1995,6 +1993,7 @@ class ThisAddonPreferences:
     def get_color(self, attr_name):
         if self.use_blender_colors:
             try:
+                userprefs = bpy.context.preferences
                 return userprefs.themes[0].view_3d.view_overlay
             except:
                 return Color((0,0,0))
@@ -2096,7 +2095,7 @@ class ThisAddonPreferences:
                     with layout.row():
                         layout.prop(self, "show_crosshair", text="Crosshair", toggle=True)
                         with layout.row()(active=self.show_crosshair):
-                            layout.prop(self, "show_focus", text="Orbit Center", toggle=True)
+                            layout.prop(self, "show_focus", text="Focus Point", toggle=True)
                     with layout.column()(active=self.show_crosshair):
                         layout.row().prop(self, "color_crosshair_visible", text="Visible")
                         layout.separator(factor=0.5)
