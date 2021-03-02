@@ -1,10 +1,24 @@
 # Mouselook Navigation
 
-## Brief overview
+* [Overview](#overview)
+  * [Features](#features)
+  * [3D Viewport](#3d-viewport)
+  * [3D Viewport header](#3d-viewport-header)
+* [Settings](#settings)
+  * [UI](#ui-section)
+  * [Behavior](#behavior-section)
+* [Keymaps](#keymaps)
+  * [Common options](#common-options)
+  * [Keymap management](#keymap-management)
+  * [List of keymap configurations](#list-of-keymap-configurations)
+  * [Keymap-specific options](#keymap-specific-options)
+* [Known issues](#known-issues)
+
+## Overview
 
 The addon attempts to provide better usability and customization of basic 3D viewport navigation (in particular, ZBrush mode and FPS-like movement). It's an alternative to Blender's default orbit/pan/zoom/dolly/fly/walk navigation.
 
-Most notable features:
+### Features
 
 * ZBrush mode - mostly useful for tablet users, since it allows to use the same mouse button both for painting/sculpting and for navigation (depending on whether you clicked on geometry or on background)
 * Easy switching between navigation modes without exiting the operator
@@ -12,100 +26,146 @@ Most notable features:
 * FPS-like movement is available in all navigation modes
 * Crosshair can be visible in all modes and has a different look when obscured
 * Option to more easily prevent accidental viewport rotation in Ortho projection
+* Option to auto-level the view when it's tilted
 * Different turntable/trackball algorithms and different fly mode (more FPS-like)
 
-**Attention:** To avoid slowdowns, disable the "Record Z-buffer" option in the addon's preferences and close the User Preferences window.  
+### 3D Viewport
 
-## Control scheme and display preferences
+![Overlays](3d-view-overlays.png)
 
-![Fig. 1. Display preferences and keymaps setup](mouselook_navigation-userprefs.png)
+* **Crosshair** - indicates the point around which the view rotates, and/or the focus point of the viewport
+* **ZBrush border** - indicates the rectangle inside which ZBrush behavior is active (outside of the rectangle, navigation will happen regardless of the presence of geometry under the mouse)
 
-Fig. 1. Display preferences and keymaps setup
+### 3D Viewport header
 
-* ZBrush radius - in ZBrush mode, navigation will be allowed only when distance (in pixels) to the nearest geometry (anything that writes to Z-buffer, actually) is greater than this value
-* ZBrush method - which method to use for determining whether the mouse is over empty space
-* Use Blender's colors - if enabled, the "Themes\3D View\View Overlay" color is used for crosshair and for zbrush border; otherwise, the colors can be specified separately. As can be seen from the Fig. 2, the obscured parts of the crosshair look differently than non-obscured ones (besides the color, the obscured parts are also wider and more transparent). This might serve as a crude estimation of where in the scene the orbit center is.
-* Show ZBrush border - enable/disable ZBrush border visualization
-* Show Crosshair - enable/disable crosshair visualization
-* Show Orbit Center - enable/disable orbit center visualization (when center of rotation differs from the orbit center)
-* Invert - toggles to invert directions of the corresponding orbit/dolly/zoom components
+![Header](3d-view-header.png)
 
-Auto-registered keymaps:
+* **Trackball** toggle - toggles between Trackball and Turntable orbit methods (chages Blender's "Orbit Method" preference)
+* **On/Off** toggle - enables/disables Mouselook Navigation, without disabling the addon itself (this setting is saved in the .blend file, instead of addon preferences)
 
-This is the section where you can set up the ways to invoke the navigation operator, and the operator's corresponding control scheme.
+## Settings
 
-* Top row:
-  * "Add" button - adds one more shortcuts to the list.
-  * "Update" button - updates Blender's keymaps with the specified shortcuts.
-  * "Load Preset" menu - loads the specified preset (all the auto-registered shortcuts will be overridden) + updates Blender's keymaps. The presets are located in the addon's "presets" directory.
-* Auto-registered keymap(s):
-  * A round icon/button - click to make the corresponding shortcut active (the navigation settings below will be displayed for this shortcut). If the shortcut is already active, clicking on it will switch to using the universal navigation settings (same for all shortcuts).
-  * "Keymaps" menu - here you can specify for which object modes the shortcut will be registered.
-  * Key/event text field - here you can list the keys/buttons (and, optionally, the type of event) which will invoke the navigation operator.
-  * Any/Shift/Ctrl/Alt/Cmd/Key modifier - here you can specify the modifiers used for this shortcut.
-  * X button - click to delete the corresponding shortcut.
-  * List of preceding operators - the auto-registered shortcuts will be inserted after the specified operators. * means all operators.
-  * List of succeeding operators - the auto-registered shortcuts will be inserted before the specified operators. * means all operators.
-* Navigation settings:
-  * Transitions - allowed transitions between modes.
-  * Default mode - the operator would start in this mode if other mode keys are not pressed.
-  * Ortho unrotate - if enabled and view projection is Orthographic, switching from Orbit to Pan/Dolly/Zoom will snap view rotation to its initial value and will disable switching to Orbit until the operator has finished.
-  * Independent modes - if enabled, each navigation mode will use its own position/rotation/zoom.
-  * ZBrush mode - if enabled, the operator's default mode will be invoked only if there is no geometry under the mouse, or if the mouse is sufficiently close to the 3D View border.
-  * Confirm - key(s) that confirm changes to view
-  * Cancel - key(s) that cancel changes to view
-  * Trackball on/off - key(s) that confirm switch between Turntable and Trackball rotation modes
-  * Origin: Mouse - key(s) that force Auto Depth option for the duration of the operator
-  * Origin: Selection - key(s) that force Rotate Around Selection option for the duration of the operator
-  * Orbit - key(s) that switch to Orbit mode
-  * Orbit Snap - key(s) that switch rotation snapping
-  * Pan - key(s) that switch to Pan mode
-  * Dolly - key(s) that switch to Dolly mode
-  * Zoom - key(s) that switch to Zoom mode
-  * Fly - key(s) that switch to Fly mode
-  * Walk - key(s) that switch to Walk mode
-  * FPS forward - key(s) that move view in forward FPS direction
-  * FPS back - key(s) that move view in backward FPS direction
-  * FPS left - key(s) that move view in left FPS direction
-  * FPS right - key(s) that move view in right FPS direction
-  * FPS up - key(s) that move view in upward FPS direction (automatically switches off gravity)
-  * FPS down - key(s) that move view in downward FPS direction (automatically switches off gravity)
-  * FPS fast - key(s) that switch FPS movement to a faster speed
-  * FPS slow - key(s) that switch FPS movement to a slower speed
-  * FPS crouch - key(s) for "crouching" in Walk mode (when gravity is on)
-  * FPS jump - key(s) for "jumping"/"jetpack" in Walk mode (automatically switches on gravity)
-  * FPS teleport - key(s) for "teleporting"/"grappling hook" in Walk mode
+![Settings](preferences-settings.png)
 
-By default, the addon auto-registers a shortcut on the same key/button as the Blender's built-in Orbit operator.
+### **UI** section
+* **Show in header** - whether to display Mouselook Navigation buttons in 3D Viewport's header
+* **Use Blender's colors** - if enabled, Blender's *3D Viewport\View Overlay* theme color is used for crosshair and for ZBrush border
+* **Crosshair** - whether to display the crosshair
+  * **Focus Point** - whether to display the viewport's focus point (when it's not the same as the current orbit point)
+  * **Visible** - color for the visible parts of the crosshair
+  * **Obscured** - color for the obscured parts of the crosshair
+* **ZBrush border** - whether to display ZBrush border
+  * **Scale** - relative size of the border (percentage of viewport size)
+  * **Min** - absolute size of the border (in pixels)
+  * **Color** - color of the border
 
-## Side-panel settings
+### **Behavior** section
+* **Non-blocking** - if enabled, navigation will not block execution of other operators
+* **Framerate** - update rate during the navigation (in frames per second)
+* **FPS horizontal** - if enabled, FPS forward/backward moves in horizontal plane, and up/down moves in the world's vertical direction
+* **Zoom to selection** - if both this and Blender's *Rotate Around Selection* preference are enabled, Mouselook Navigation will zoom to the center of selection
+* **Adjust Multires** - if this and the *Fast Navigate* option (in Blender's *Sculpt* menu) are enabled, the sculpt resolution of Multires modifier will be set to 1 during the navigation in Sculpt mode (*WARNING: for high-detail meshes, this will cause lag / delays when starting or ending the navigation*)
+* **Zoom speed** - speed multiplier for zooming.
+* **Rotation speed** - speed multiplier for rotation.
+* **Movement speed** - speed multiplier for FPS movement.
+* **Autolevel speed** - the speed of autolevelling
+* **Geometry detection** (affects the addon's behavior in ZBrush mode and/or when Blender's *Auto Depth* preference is enabled)
+  * **Geometry detection method** - how to detect the geometry under the mouse
+    * *Raycast* - uses raycasting; can detect only mesh objects (*WARNING: causes problems in Sculpt mode*)
+    * *Selection* - uses Blender's selection operator (*WARNING: causes problems in Sculpt mode*)
+    * *Z-buffer* - renders the viewport to a depth buffer (*WARNING: may potentially crash Blender, if other addons attempt to use wm.redraw_timer() in the same frame*)
+  * **Object modes** - in which object modes geometry detection should be used
+  * **Radius** - distance (in pixels) to the nearest geometry, above which ZBrush navigation is allowed
+* **Orbit snap** (options for angle snapping during orbiting)
+  * **To Ortho** - if this and Blender's *Auto Perspective* preference are enabled, orbit snapping would switch the view to the Orthographic mode.
+  * **Subdivs** - number of intermediate angles to which the view rotation can be snapped (1 snaps to each 90 degrees, 2 snaps to each 45 degrees, and so on)
+* **Trackball** (options related to Trackball mode)
+  * **Trackball mode** - which trackball algorithm to use
+    * *Center* - rotation depends only on mouse speed and not on mouse position
+    * *Wrapped* - like Center, but rotation depends on mouse position
+    * *Blender* - attempts to emulate Blender's trackball behavior (though does not behave exactly the same)
+  * **Autolevel** - enables or disables autolevelling in the trackball mode
+    * **Up** - if enabled, autolevelling would always try to orient view's up axis to world's up axis in trackball mode
+  * **Auto switch** - enables or disables automatic switching between Trackball and Turntable in certain object modes
+    * **Auto Trackball modes** dropdown - in which object modes to auto-switch to Trackball
+  * **Show** - if enabled, the Trackball toggle in 3D Viewport's header will be shown
 
-![Fig. 2. 3D view and side-panel settings](mouselook_navigation-view3d.png)
+## Keymaps
 
-Fig. 2. 3D view and side-panel settings
+![Keymaps](preferences-keymaps-blender.png)
 
-* Mouselook Nav. toggle - enables or disables the mouse-look navigation operator.
-* Show/hide - quick access to enabling/disabling the visualization of crosshair, orbit center and ZBrush border.
-* Zoom speed - speed multiplier for zooming.
-* Rotation speed - speed multiplier for rotation.
-* FPS speed - speed multiplier for FPS movement.
-* FPS horizontal - if enabled, FPS forward/backward keys move view in horizontal plane, and up/down keys move view in the world's vertical direction.
-* Zoom to selection - if Rotate Around Selection is enabled in the user preferences, then Mouselook Navigation will zoom to the center of selection.
-* Orbit snap
-  * To Ortho - if Auto Perspective is enabled in the user preferences, then rotation snapping would switch the view to Orthographic mode.
-  * Subdivs - number of intermediate angles to which the view rotation can be snapped (1 snaps to each 90 degrees, 2 snaps to each 45 degrees, and so on).
-* Trackball
-  * Mode - what trackball algorithm to use.
-    * Center - rotation depends only on mouse speed and not on mouse position; has the most stable and predictable behavior.
-    * Wrapped - like Center, but rotation depends on mouse position.
-    * Blender - uses the same trackball algorithm as in Blender (in theory. In practice I haven't figured out how to make it behave exactly like in Blender).
-  * Autolevel - enables or disables autolevelling in the trackball mode.
-  * Up - if enabled, autolevelling would always try to orient view's up axis to world's up axis in trackball mode.
-* Autolevel speed - the speed of autolevelling (autolevelling decreases the tilt of the view over time).
+Here you can customize the keymaps / shortcuts used for invoking the navigation operator, and its behavior. These keymaps are automatically registered on addon initialization.
+
+### Common options
+  * **Invert** - which directions/axes should be inverted
+
+### Keymap management
+  * **Add Keymap** - adds a new keymap configuration to the list (note: this does not automatically update Blender's keymaps)
+  * **Update keymaps** - updates Blender's keymaps according to the list of keymap configurations
+  * **Load Preset** - a popup panel for loading and managing keymap presets
+  ![Keymap presets](keymap-presets.png)
+  
+    * ***Reset*** - resets the list of presets
+    * ***Add*** - saves the current setup to a new preset
+    * ***Load*** - loads the specified preset (and updates Blender's keymaps)
+    * ***Delete*** - deletes the specified preset
+    * Presets can also be ***imported*** from and ***exported*** to the file system (the corresponding options are located in the context menu - simply right-click on any button in the Keymap presets panel)
+      * If you didn't right-click on a specific preset, then the "Export" option will export the current setup
+
+### List of keymap configurations
+Each of the keymap configurations has the following elements:
+* [**⊙**](a "Round button") - (un)selects the corresponding keymap
+* **Modifiers** - which modifier(s) (Shift, Ctrl, Alt...) to use for this shortcut
+* **Keys (events)** - key(s) and event(s) that should trigger the keymap's operator (a separate keymap will be registered for each combination)
+* **Keymaps** - in which of the Blender's keymap categories the shortcuts should be registered (note: only those relevant to 3D viewport navigation are listed here)
+* **X** - deletes the corresponding keymap configuration
+* **Preceding operators** (left) - which operators need to have higher priority than this keymap's operator (asterisk * means all operators)
+* **Succeeding operators** (right) - which operators need to have lower priority than this keymap's operator (asterisk * means all operators)
+
+### Keymap-specific options
+This section shows options for the selected keymap configuration (or the default options, if no keymap is selected). Each keymap-specific option has an **Override** toggle ([📌](a "Pin icon")), which allows to override the default value.
+* **Transitions** - allowed transitions between modes
+* **Mode** - keymap's default mode
+* **Independent modes** - if enabled, each navigation mode will use its own position/rotation/zoom
+* **ZBrush** - what type of ZBrush behavior (if any) to use for this keymap
+  * *Off* - don't use ZBrush behavior
+  * *Simple* - use ZBrush behavior only when no modifier keys are pressed
+  * *Always* - always use ZBrush behavior
+* **Origin** - what should be used as the orbit origin
+  * *Auto* - determine orbit origin from Blender's preferences
+  * *View* - use 3D viewport's focus point
+  * *Mouse* - orbit around the point under the mouse
+  * *Selection* - orbit around the selection pivot
+* **Ortho unrotate** - if enabled and view projection is Orthographic, switching from Orbit to Pan/Dolly/Zoom will snap view rotation to its initial value and will disable switching to Orbit until the operator has finished
+* ***Navigation shortcuts*** (keys used during the navigation)
+  * **Confirm** - finish the navigation
+  * **Cancel** - finish the navigation and return the viewport to how it was
+  * **Trackball** - switch between Turntable and Trackball orbit methods
+  * **Orbit** - switch to Orbit mode
+  * **Snap** - toggle rotation snapping
+  * **Pan** - switch to Pan mode
+  * **Dolly** - switch to Dolly mode
+  * **Zoom** - switch to Zoom mode
+  * **Fly** - switch to Fly mode
+  * **Walk** - switch to Walk mode
+  * **X only** - use only X-axis input
+  * **Y only** - use only Y-axis input
+* ***FPS mode shortcuts*** (keys used for FPS-like navigation)
+  * **Forward** - move forward
+  * **Back** - move backward
+  * **Left** - move left
+  * **Right** - move right
+  * **Up** - move upward (automatically switches off gravity)
+  * **Down** - move downward (automatically switches off gravity)
+  * **Faster** - use fast speed
+  * **Slower** - use slow speed
+  * **Crouch** - "crouch" in Walk mode (when gravity is on)
+  * **Jump** - "jump"/"jetpack" in Walk mode (automatically switches on gravity)
+  * **Teleport** - "teleport"/"grappling hook" in Walk mode
 
 ## Known issues
 
-* Blender trackball mode doesn't actually behave like in Blender
+* The "Blender" trackball mode doesn't actually behave like in Blender
 * Ortho-grid/quadview-clip/projection-name display is not updated
-* Rotate Around Selection might work incorrectly in scuplt/paint modes and when editing metaballs or text-curves
+* Blender's *Rotate Around Selection* behavior is not exactly replicated in scuplt/paint modes and when editing text-curves
 * Zooming/rotation around the last paint/sculpt stroke position is not supported
