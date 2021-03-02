@@ -103,8 +103,7 @@ Here you can customize the keymaps / shortcuts used for invoking the navigation 
   * **Add Keymap** - adds a new keymap configuration to the list (note: this does not automatically update Blender's keymaps)
   * **Update keymaps** - updates Blender's keymaps according to the list of keymap configurations
   * **Load Preset** - a popup panel for loading and managing keymap presets
-  ![Keymap presets](keymap-presets.png)
-  
+    * ![Keymap presets](keymap-presets.png)
     * ***Reset*** - resets the list of presets
     * ***Add*** - saves the current setup to a new preset
     * ***Load*** - loads the specified preset (and updates Blender's keymaps)
