@@ -1135,7 +1135,7 @@ class prop:
         
         items = kwargs.get("items", ())
         if hasattr(items, "__iter__"): # sequence -> ensure full form
-            # Note: ID is actually a bitmask
+            # Note: empty items is a valid situation (e.g. when they are populated later)
             items = [cls.expand_enum_item(v, (1 << id) if enum_flag else (id+1)) for id, v in enumerate(items)]
             kwargs["items"] = items
             if enum_flag:

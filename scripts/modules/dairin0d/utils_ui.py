@@ -24,7 +24,7 @@ from mathutils import Color, Vector, Matrix, Quaternion, Euler
 from .utils_python import DummyObject
 from .bounds import Bounds
 from .utils_gl import TextWrapper
-from .bpy_inspect import BlRna
+from .bpy_inspect import BlRna, prop
 
 #============================================================================#
 
@@ -266,12 +266,12 @@ class NestedLayout:
     class FoldPG(bpy.types.PropertyGroup):
         def update(self, context):
             pass # just indicates that the widget needs to be force-updated
-        value: bpy.props.BoolProperty(description="Fold/unfold", update=update, name="")
+        value: False | prop("", "Fold/unfold", update=update)
     bpy.utils.register_class(FoldPG) # REGISTER
     
     # make up some name that's unlikely to be used by normal addons
     folds_keyname = "dairin0d_ui_utils_NestedLayout_ui_folds"
-    setattr(bpy.types.Screen, folds_keyname, bpy.props.CollectionProperty(type=FoldPG)) # REGISTER
+    setattr(bpy.types.Screen, folds_keyname, [FoldPG] | prop()) # REGISTER
     
     folded = False # stores folded status from the latest fold() call
     
