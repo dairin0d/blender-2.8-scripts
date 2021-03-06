@@ -135,7 +135,7 @@ def ensure_baseclass(cls, base):
     return type(cls.__name__, tuple(bases), members)
 
 def issubclass_safe(value, classinfo):
-    return (issubclass(value, classinfo) if isinstance(value, type) else None)
+    return (issubclass(value, classinfo) if inspect.isclass(value) else None)
 
 def add_mixins(cls, *mixins, inherited=True):
     if isinstance(cls, str): cls = type(cls, (), {})

@@ -247,8 +247,7 @@ class NestedLayout:
             kwargs = dict(override)
             override = (lambda identifier: kwargs)
         
-        prop_rna = BlRna(obj).properties[prop_name]
-        for item in prop_rna.enum_items:
+        for item in BlRna.enum_items(obj, prop_name, container=iter):
             if item.identifier in exclude: continue
             kwargs = override(item.identifier)
             kwargs.setdefault("text_ctxt", text_ctxt)

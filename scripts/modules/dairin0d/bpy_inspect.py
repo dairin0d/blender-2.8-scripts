@@ -123,78 +123,83 @@ class BlRna:
             return None
     
     @staticmethod
+    def enum_items(obj, name, container=list):
+        if isinstance(obj, str): obj = getattr(bpy.types, obj)
+        
+        rna_prop = BlRna(obj).properties[name]
+        enum_items = rna_prop.enum_items
+        
+        if not enum_items:
+            # RNA enum items may be empty also when dynamic items are used.
+            # If obj is based on a python class, we can try checking this explicitly.
+            function, keywords = BpyProp.find(obj, name, unwrap=True)
+            if function:
+                items = keywords.get("items")
+                if callable(items):
+                    try:
+                        enum_items = items(obj, bpy.context)
+                    except Exception:
+                        pass
+        
+        return BpyEnum.normalize_items(enum_items, rna_prop.is_enum_flag, separators=False, container=container, wrap=True)
+    
+    @staticmethod
     def to_bpy_prop(obj, name=None):
         rna_prop = (obj if name is None else BlRna(obj).properties[name])
         
         type_id = rna_prop.bl_rna.identifier
-        bpy_prop = BlRna.rna_to_bpy.get(type_id)
-        if not bpy_prop: return None
+        function = BlRna.rna_to_bpy.get(type_id)
+        if not function: return None
         
-        bpy_args = dict(name=rna_prop.name, description=rna_prop.description, options=set())
-        def map_arg(rna_name, bpy_name, is_option=False):
-            if is_option:
-                if getattr(rna_prop, rna_name, False):
-                    bpy_args["options"].add(bpy_name)
-            else:
-                # Some built-in enum properties may have incorrectly specified RNA, leading to
-                # warnings like "pyrna_enum_to_py: current value ... matches no enum in ..."
-                # The best we can do is merely to minimize the number of such warnings.
-                value = getattr(rna_prop, rna_name, BlRna) # any invalid default will do
-                if value is not BlRna:
-                    bpy_args[bpy_name] = BlRna.serialize_value(value, False)
+        keywords = dict(name=rna_prop.name, description=rna_prop.description, options=set())
         
-        def fix_enum_default():
-            # Some built-in properties may have invalid defaults.
-            # E.g. ColorManagedInputColorspaceSettings.name has
-            # 'NONE' as default, but it's not a recognized value.
-            items = bpy_args["items"]
-            item_keys = {item[0] for item in items}
-            value = bpy_args["default"]
-            if isinstance(value, str):
-                # Some built-in properties may not even have items (e.g.
-                # "sort_method" in the built-in importers/exporters) :-(
-                if value not in item_keys:
-                    # For no-items enums, default=None seems to not cause errors
-                    bpy_args["default"] = (items[0][0] if items else None)
-            else:
-                bpy_args["default"] = {key for key in value if key in item_keys}
+        def map_option(rna_name, bpy_name):
+            if getattr(rna_prop, rna_name, False):
+                keywords["options"].add(bpy_name)
         
-        map_arg("is_hidden", 'HIDDEN', True)
-        map_arg("is_skip_save", 'SKIP_SAVE', True)
-        map_arg("is_animatable", 'ANIMATABLE', True)
-        map_arg("is_library_editable", 'LIBRARY_EDITABLE', True)
+        def map_keyword(rna_name, bpy_name):
+            # Some built-in enum properties may have incorrectly specified RNA, leading to
+            # warnings like "pyrna_enum_to_py: current value ... matches no enum in ..."
+            # The best we can do is merely to minimize the number of such warnings.
+            value = getattr(rna_prop, rna_name, BlRna) # any invalid default will do
+            if value is not BlRna:
+                keywords[bpy_name] = BlRna.serialize_value(value, False)
+        
+        map_option("is_hidden", 'HIDDEN')
+        map_option("is_skip_save", 'SKIP_SAVE')
+        map_option("is_animatable", 'ANIMATABLE')
+        map_option("is_library_editable", 'LIBRARY_EDITABLE')
+        #map_option("", 'PROPORTIONAL') # no correspondence?
         if type_id == "EnumProperty":
-            map_arg("is_enum_flag", 'ENUM_FLAG', True)
-        else:
-            pass #map_arg("", 'PROPORTIONAL', True) # no correspondence?
+            map_option("is_enum_flag", 'ENUM_FLAG')
         
         if hasattr(rna_prop, "array_length"):
             if rna_prop.array_length == 0:
-                bpy_prop = bpy_prop[0] # bool/int/float
-                map_arg("default", "default")
+                function = function[0] # bool/int/float
+                map_keyword("default", "default")
             else:
-                bpy_prop = bpy_prop[1] # bool/int/float vector
-                map_arg("array_length", "size")
-                map_arg("default_array", "default")
-            map_arg("subtype", "subtype")
-            map_arg("hard_min", "min")
-            map_arg("soft_min", "soft_min")
-            map_arg("hard_max", "max")
-            map_arg("soft_max", "soft_max")
-            map_arg("step", "step")
-            map_arg("precision", "precision")
+                function = function[1] # bool/int/float vector
+                map_keyword("array_length", "size")
+                map_keyword("default_array", "default")
+            map_keyword("subtype", "subtype")
+            map_keyword("hard_min", "min")
+            map_keyword("soft_min", "soft_min")
+            map_keyword("hard_max", "max")
+            map_keyword("soft_max", "soft_max")
+            map_keyword("step", "step")
+            map_keyword("precision", "precision")
         elif type_id == "StringProperty":
-            map_arg("default", "default")
-            map_arg("subtype", "subtype")
+            map_keyword("default", "default")
+            map_keyword("subtype", "subtype")
         elif type_id == "EnumProperty":
-            map_arg(("default_flag" if rna_prop.is_enum_flag else "default"), "default")
-            map_arg("enum_items", "items")
-            fix_enum_default()
+            map_keyword(("default_flag" if rna_prop.is_enum_flag else "default"), "default")
+            map_keyword("enum_items", "items")
+            keywords["default"] = BpyEnum.fix_value(keywords["items"], keywords["default"])
         else:
             # Caution: fixed_type returns a blender struct, not the original class
-            map_arg("fixed_type", "type")
+            map_keyword("fixed_type", "type")
         
-        return (bpy_prop, bpy_args)
+        return BpyProp.wrap(function, keywords)
     
     @staticmethod
     def properties(obj):
@@ -433,7 +438,7 @@ class BlRna:
             if name in specials:
                 if not specials[name](rna_prop, valueA, valueB): return False
             elif not BlRna.compare_prop(rna_prop, valueA, valueB):
-                #print("Not same: {} in {}/{}".format(name, type(valueA), type(valueB)))
+                #print(f"Not same: {name} in {type(valueA)}/{type(valueB)}")
                 return False
         return True
 
@@ -446,8 +451,8 @@ class BpyData:
         ID_types = []
         for name in dir(bpy.types):
             if name == "ID": continue
-            t = getattr(bpy.types, name)
-            if not issubclass(t, bpy.types.ID): continue
+            t = getattr(bpy.types, name) # Note: t may be not a class
+            if not issubclass_safe(t, bpy.types.ID): continue
             ID_types.append(name)
         
         ID_datas = []
@@ -551,70 +556,58 @@ class BpyProp:
     
     base_type = type(bpy.props.BoolProperty) # builtin_function_or_method
     
+    # In Blender 2.93+, bpy.props._PropertyDeferred is used instead of tuple
+    wrapper_type = getattr(bpy.props, "_PropertyDeferred", None)
+    wrapper_types = ((wrapper_type,) if wrapper_type else ())
+    
+    unwrapper_type = namedtuple("BpyPropUnwrapped", ["function", "keywords"])
+    
+    def _make_defaults(has_update=True, has_get_set=True, **kwargs):
+        result = dict(name="", description="", options={'ANIMATABLE'}, tags=set(), **kwargs)
+        if bpy.app.version >= (2, 90, 0): result.update(override=set())
+        if has_update: result.update(update=None)
+        if has_get_set: result.update(get=None, set=None)
+        return result
+    
     # I have no idea how to get the default values using reflection
     # (it seems like bpy.props.* functions have no python-accessible signature)
     known = {
-        bpy.props.BoolProperty:dict(
-            name="", description="", options={'ANIMATABLE'},
-            tags=set(), update=None, get=None, set=None,
+        bpy.props.BoolProperty:_make_defaults(
             default=False, subtype='NONE',
         ),
-        bpy.props.BoolVectorProperty:dict(
-            name="", description="", options={'ANIMATABLE'},
-            tags=set(), update=None, get=None, set=None,
-            default=(False, False, False), subtype='NONE',
-            size=3,
+        bpy.props.BoolVectorProperty:_make_defaults(
+            default=(False, False, False), size=3, subtype='NONE',
         ),
-        bpy.props.IntProperty:dict(
-            name="", description="", options={'ANIMATABLE'},
-            tags=set(), update=None, get=None, set=None,
-            default=0, subtype='NONE',
+        bpy.props.IntProperty:_make_defaults(
+            default=0, step=1, subtype='NONE',
             min=-2**31, soft_min=-2**31,
             max=2**31-1, soft_max=2**31-1,
-            step=1,
         ),
-        bpy.props.IntVectorProperty:dict(
-            name="", description="", options={'ANIMATABLE'},
-            tags=set(), update=None, get=None, set=None,
-            default=(0, 0, 0), subtype='NONE',
+        bpy.props.IntVectorProperty:_make_defaults(
+            default=(0, 0, 0), size=3, step=1, subtype='NONE',
             min=-2**31, soft_min=-2**31,
             max=2**31-1, soft_max=2**31-1,
-            step=1, size=3,
         ),
-        bpy.props.FloatProperty:dict(
-            name="", description="", options={'ANIMATABLE'},
-            tags=set(), update=None, get=None, set=None,
-            default=0.0, subtype='NONE', unit='NONE',
+        bpy.props.FloatProperty:_make_defaults(
+            default=0.0, step=3, precision=2, subtype='NONE', unit='NONE',
             min=sys.float_info.min, soft_min=sys.float_info.min,
             max=sys.float_info.max, soft_max=sys.float_info.max,
-            step=3, precision=2,
         ),
-        bpy.props.FloatVectorProperty:dict(
-            name="", description="", options={'ANIMATABLE'},
-            tags=set(), update=None, get=None, set=None,
-            default=(0.0, 0.0, 0.0), subtype='NONE', unit='NONE',
+        bpy.props.FloatVectorProperty:_make_defaults(
+            default=(0.0, 0.0, 0.0), size=3, step=3, precision=2, subtype='NONE', unit='NONE',
             min=sys.float_info.min, soft_min=sys.float_info.min,
             max=sys.float_info.max, soft_max=sys.float_info.max,
-            step=3, precision=2, size=3,
         ),
-        bpy.props.StringProperty:dict(
-            name="", description="", options={'ANIMATABLE'},
-            tags=set(), update=None, get=None, set=None,
+        bpy.props.StringProperty:_make_defaults(
             default="", subtype='NONE', maxlen=0,
         ),
-        bpy.props.EnumProperty:dict(
-            name="", description="", options={'ANIMATABLE'},
-            tags=set(), update=None, get=None, set=None,
-            default="", items=None,
+        bpy.props.EnumProperty:_make_defaults(
+            default=None, items=None,
         ),
-        bpy.props.PointerProperty:dict(
-            name="", description="", options={'ANIMATABLE'},
-            tags=set(), update=None, poll=None,
-            type=None,
+        bpy.props.PointerProperty:_make_defaults(True, False,
+            poll=None, type=None,
         ),
-        bpy.props.CollectionProperty:dict(
-            name="", description="", options={'ANIMATABLE'},
-            tags=set(),
+        bpy.props.CollectionProperty:_make_defaults(False, False,
             type=None,
         ),
     }
@@ -624,14 +617,50 @@ class BpyProp:
                bpy.props.FloatVectorProperty)
     
     @staticmethod
-    def validate(value):
-        """Test whether a given object is a bpy property"""
-        return (isinstance(value, tuple) and (len(value) == 2) and
-                isinstance(value[0], BpyProp.base_type) and # make sure it's a hashable type
-                (value[0] in BpyProp.known) and isinstance(value[1], dict))
+    def wrap(function, keywords):
+        return function(**keywords)
     
     @staticmethod
-    def iterate(cls, only_type=False, exclude_hidden=False, names=None, static=True, dynamic=True, inherited=False):
+    def unwrap(bpy_prop, exact=False):
+        if isinstance(bpy_prop, (BpyProp.wrapper_types if exact else BpyProp.wrapper_types_extended)):
+            return BpyProp.unwrapper_type(bpy_prop.function, bpy_prop.keywords)
+        elif isinstance(bpy_prop, tuple) and (len(bpy_prop) == 2) and BpyProp.is_wrappable(*bpy_prop):
+            return BpyProp.unwrapper_type(*bpy_prop)
+        return BpyProp.unwrapper_type(None, None)
+    
+    @staticmethod
+    def is_wrappable(function, keywords):
+        # Before checking presence in BpyProp.known, make sure it's a hashable type
+        if not isinstance(function, BpyProp.base_type): return False
+        return (function in BpyProp.known) and isinstance(keywords, dict)
+    
+    @staticmethod
+    def validate(value):
+        """Test whether a given object is a bpy property"""
+        if BpyProp.wrapper_type: return isinstance(value, BpyProp.wrapper_type)
+        return isinstance(value, tuple) and (len(value) == 2) and BpyProp.is_wrappable(*value)
+    
+    @staticmethod
+    def find(cls, name, unwrap=False):
+        if not isinstance(cls, type): cls = type(cls)
+        
+        annotations = getattr(cls, "__annotations__", None)
+        bpy_prop = (annotations.get(name) if annotations else None)
+        
+        if unwrap:
+            unwrapped = BpyProp.unwrap(bpy_prop, True)
+            if unwrapped.function: return unwrapped
+            
+            bpy_prop = getattr(cls, name, None)
+            return BpyProp.unwrap(bpy_prop, True)
+        else:
+            if BpyProp.validate(bpy_prop): return bpy_prop
+            
+            bpy_prop = getattr(cls, name, None)
+            return (bpy_prop if BpyProp.validate(bpy_prop) else None)
+    
+    @staticmethod
+    def iterate(cls, exclude_hidden=False, names=None, static=True, dynamic=True, inherited=False):
         """Iterate over bpy properties in a class"""
         if not isinstance(cls, type): cls = type(cls)
         if isinstance(names, str): names = (names,)
@@ -643,10 +672,10 @@ class BpyProp:
             if not storage: return
             for name in (storage.keys() if names is None else names):
                 if name.startswith("_"): continue # bpy prop name cannot start with an underscore
-                value = storage.get(name)
-                if not BpyProp.validate(value): continue
-                if exclude_hidden and ('HIDDEN' in value[1].get("options", "")): continue
-                yield (name, (value[0] if only_type else BpyProp(value, True)))
+                prop_info = BpyProp(storage.get(name))
+                if not prop_info: continue
+                if exclude_hidden and ('HIDDEN' in prop_info.get("options")): continue
+                yield name, prop_info
         
         # It seems that in some cases Blender ignores annotations/attributes in parent classes?
         
@@ -665,17 +694,17 @@ class BpyProp:
     @staticmethod
     def is_in(cls, exclude_hidden=False):
         """Test whether a given class contains any bpy properties"""
-        return any(BpyProp.iterate(cls, True, exclude_hidden))
+        return any(BpyProp.iterate(cls, exclude_hidden=exclude_hidden))
     
     @staticmethod
     def reset(obj, names=None, recursive=False):
         """Reset properties of an instance to their default values"""
         for key, info in BpyProp.iterate(type(obj), names=names):
-            if info.type == bpy.props.PointerProperty:
+            if info.function == bpy.props.PointerProperty:
                 if recursive:
                     _obj = getattr(obj, key)
                     BpyProp.reset(_obj, None, True)
-            elif info.type == bpy.props.CollectionProperty:
+            elif info.function == bpy.props.CollectionProperty:
                 if recursive:
                     for _obj in getattr(obj, key):
                         BpyProp.reset(_obj, None, True)
@@ -692,7 +721,7 @@ class BpyProp:
         if not cls: cls = type(obj)
         
         for key, info in BpyProp.iterate(cls, names=names):
-            if use_skip_save and ('SKIP_SAVE' in info["options"]): continue
+            if use_skip_save and ('SKIP_SAVE' in info.get("options", "")): continue
             
             try:
                 data_value = data[key]
@@ -701,16 +730,20 @@ class BpyProp:
             except KeyError:
                 continue
             
-            if info.type == bpy.props.PointerProperty:
+            if info.function == bpy.props.PointerProperty:
                 _cls = info["type"]
                 _obj = getattr(obj, key)
+                
                 BpyProp.deserialize(_obj, data_value, _cls)
-            elif info.type == bpy.props.CollectionProperty:
+            elif info.function == bpy.props.CollectionProperty:
                 if not isinstance(data_value, list): continue
+                
                 _cls = info["type"]
                 collection = getattr(obj, key)
+                
                 while len(collection) != 0:
                     collection.remove(0)
+                
                 for _data in data_value:
                     _obj = collection.add()
                     BpyProp.deserialize(_obj, _data, _cls)
@@ -729,18 +762,18 @@ class BpyProp:
         data = {}
         
         for key, info in BpyProp.iterate(cls, names=names):
-            if use_skip_save and ('SKIP_SAVE' in info["options"]): continue
+            if use_skip_save and ('SKIP_SAVE' in info.get("options", "")): continue
             
             data_value = getattr(obj, key)
             
-            if info.type == bpy.props.PointerProperty:
+            if info.function == bpy.props.PointerProperty:
                 _cls = info["type"]
                 _obj = data_value
                 data[key] = BpyProp.serialize(_obj, _cls)
-            elif info.type == bpy.props.CollectionProperty:
+            elif info.function == bpy.props.CollectionProperty:
                 _cls = info["type"]
                 data[key] = [BpyProp.serialize(_obj, _cls) for _obj in data_value]
-            elif info.type in BpyProp.vectors:
+            elif info.function in BpyProp.vectors:
                 if isinstance(data_value, Matrix): data_value = matrix_flatten(data_value)
                 data[key] = list(data_value)
             else:
@@ -748,39 +781,30 @@ class BpyProp:
         
         return data
     
-    @staticmethod
-    def __dummy_update(self, context):
-        """Used for cases when there is no actual update logic, but changes to the property should still redraw the UI"""
-        pass
-    
     # ======================================================================= #
+    
+    __slots__ = ["function", "keywords"]
     
     def __new__(cls, arg0, arg1=None):
         self = None
-        if arg1 is True: # arg0 is a validated bpy prop
-            self = object.__new__(cls)
-            self.type, self.args = arg0
-        elif arg1 is None: # arg0 is potentially a bpy prop
-            if cls.validate(arg0):
+        if arg1 is None: # arg0 is potentially a bpy prop
+            function, keywords = BpyProp.unwrap(arg0, False)
+            if function:
                 self = object.__new__(cls)
-                self.type, self.args = arg0
+                self.function, self.keywords = function, keywords
         elif isinstance(arg1, str): # arg0 is object/type, arg1 is property name
-            if not isinstance(arg0, type): arg0 = type(arg0)
-            annotations = getattr(arg0, "__annotations__", None)
-            arg0_ann = (annotations.get(arg1) if annotations else None)
-            if cls.validate(arg0_ann):
+            function, keywords = BpyProp.find(arg0, arg1, unwrap=True)
+            if function:
                 self = object.__new__(cls)
-                self.type, self.args = arg0_ann
-            else:
-                arg0 = getattr(arg0, arg1, None)
-                if cls.validate(arg0):
-                    self = object.__new__(cls)
-                    self.type, self.args = arg0
+                self.function, self.keywords = function, keywords
+        elif BpyProp.is_wrappable(arg0, arg1):
+            self = object.__new__(cls)
+            self.function, self.keywords = arg0, arg1
         return self
     
     def __call__(self, copy=False):
         """Create an equivalent bpy.props.* structure"""
-        return (self.type, self.args.copy() if copy else self.args)
+        return BpyProp.wrap(self.function, self.keywords.copy() if copy else self.keywords)
     
     # Extra attributes are useful to store custom callbacks and various metadata
     # (accessible via type(obj)'s attributes / __annotations__).
@@ -790,13 +814,15 @@ class BpyProp:
     class __set_extra(set):
         pass
     
+    __dummy = object()
+    
     @property
     def extra(self):
-        options = self.args.get("options", None)
+        options = self.keywords.get("options", None)
         return getattr(options, "extra", None)
     @extra.setter
     def extra(self, value):
-        options = self.args.get("options", None)
+        options = self.keywords.get("options", None)
         extra = getattr(options, "extra", None)
         if extra is value: return
         options_extra = options
@@ -804,14 +830,16 @@ class BpyProp:
             options_extra = self.__set_extra()
             if options is None: options = {'ANIMATABLE'}
             if options: options_extra.update(options)
-            self.args["options"] = options_extra
+            self.keywords["options"] = options_extra
         options_extra.extra = value
     
-    def get(self, name, default=None):
-        return self.args.get(name, default)
+    def get(self, name, default=__dummy):
+        result = self.keywords.get(name, default)
+        if result is not BpyProp.__dummy: return result
+        return BpyProp.known[self.function].get(name)
     
     def __getitem__(self, name):
-        return self.args[name]
+        return self.keywords[name]
     
     def __setitem__(self, name, value):
         if name == "options":
@@ -819,30 +847,193 @@ class BpyProp:
             if extra is not None:
                 value = self.__set_extra(value)
                 value.extra = extra
-        self.args[name] = value
+        self.keywords[name] = value
     
     def __contains__(self, name):
-        return name in self.args
+        return name in self.keywords
     
     def __len__(self):
-        return len(self.args)
+        return len(self.keywords)
     
     def __iter__(self):
-        return self.args.keys()
+        return self.keywords.keys()
     
     def items(self):
-        return self.args.items()
+        return self.keywords.items()
     
     def keys(self):
-        return self.args.keys()
+        return self.keywords.keys()
     
     def values(self):
-        return self.args.values()
+        return self.keywords.values()
     
-    def update(self, d, replace_old=True):
-        for k, v in d.items():
-            if replace_old or (k not in self.args):
+    def update(self, *args, **kwargs):
+        for arg in args:
+            for k, v in (arg.items() if hasattr(arg, "items") else arg):
                 self[k] = v
+        
+        for k, v in kwargs.items():
+            self[k] = v
+    
+    def add_missing(self, d):
+        for arg in args:
+            for k, v in (arg.items() if hasattr(arg, "items") else arg):
+                if k not in self.keywords: self[k] = v
+        
+        for k, v in kwargs.items():
+            if k not in self.keywords: self[k] = v
+
+BpyProp.wrapper_types_extended = ((BpyProp.wrapper_type, BpyProp) if BpyProp.wrapper_type else (BpyProp,))
+
+class BpyEnum:
+    separators_allowed = (bpy.app.version >= (2, 81, 0))
+    
+    Item = namedtuple("Item", ["identifier", "name", "description", "icon", "value"])
+    
+    @classmethod
+    def normalize_item(cls, item, value=0, wrap=False):
+        if item is None:
+            return None # separator
+        elif isinstance(item, tuple) and (len(item) == 5):
+            if wrap: return cls.Item(*item)
+            return item
+        elif isinstance(item, bpy.types.EnumPropertyItem):
+            if wrap: return cls.Item(item.identifier, item.name, item.description, item.icon, item.value)
+            return (item.identifier, item.name, item.description, item.icon, item.value)
+        elif isinstance(item, str):
+            if wrap: return cls.Item(item, item, "", 'NONE', value)
+            return (item, item, "", 'NONE', value)
+        elif isinstance(item, dict):
+            identifier = item.get("identifier", "")
+            name = item.get("name", "")
+            description = item.get("description", "")
+            icon = item.get("icon", 'NONE')
+            value = item.get("value", value)
+            if wrap: return cls.Item(identifier or name, name or identifier, description, icon, value)
+            return (identifier or name, name or identifier, description, icon, value)
+        else: # iterable
+            item = iter(item)
+            identifier = next(item, "")
+            name = next(item, identifier)
+            description = next(item, "")
+            arg4 = next(item, None)
+            arg5 = next(item, None)
+            if arg5 is None:
+                if isinstance(arg4, int):
+                    value = arg4
+                elif isinstance(arg4, str):
+                    icon = arg4
+                else:
+                    icon = 'NONE'
+            else:
+                icon, value = arg4, arg5
+            if wrap: return cls.Item(identifier, name, description, icon, value)
+            return (identifier, name, description, icon, value)
+    
+    @classmethod
+    def normalize_items(cls, items, is_flag, separators=True, container=list, wrap=False):
+        return container(cls.normalize_item(item, value, wrap) for value, item in cls.enumerate(items, is_flag, separators))
+    
+    @classmethod
+    def enumerate(cls, items, is_flag, separators=True):
+        separators = separators and cls.separators_allowed
+        value = 1
+        for item in items:
+            if item is None:
+                if separators: yield None, None
+            else:
+                yield value, item
+                value = ((value << 1) if is_flag else (value + 1))
+    
+    @classmethod
+    def normalize_value(cls, items, value, is_flag):
+        # value is expected to be a valid entry
+        if not isinstance(value, int):
+            if is_flag:
+                value = (({value} if isinstance(value, str) else set(value)) if value else set())
+            else:
+                if (not value) and items: value = items[0][0]
+        return value
+    
+    @classmethod
+    def fix_value(cls, items, value, is_flag=None):
+        # Some built-in properties may have invalid defaults.
+        # E.g. ColorManagedInputColorspaceSettings.name has
+        # 'NONE' as default, but it's not a recognized value.
+        if isinstance(value, int):
+            item_values = {item[-1] for item in items if item}
+            if is_flag:
+                mask = 0
+                for item_value in item_values:
+                    mask |= item_value
+                return value & mask
+            else:
+                for item_value in item_values:
+                    if item_value == value: return value
+                return (items[0][-1] if items else None)
+        else:
+            if is_flag is None: is_flag = not isinstance(value, str)
+            item_keys = {item[0] for item in items if item}
+            if is_flag:
+                return item_keys.intersection(value)
+            else:
+                if value in item_keys: return value
+                # Some built-in properties may not even have items (e.g.
+                # "sort_method" in the built-in importers/exporters) :-(
+                # For no-items enums, default=None seems to not cause errors
+                return (items[0][0] if items else None)
+    
+    @classmethod
+    def to_int(cls, items, value, is_flag=None):
+        # Expects normalized items
+        if is_flag is None: is_flag = not isinstance(value, str)
+        if is_flag:
+            res = 0
+            for item in items:
+                if item[0] in value: res |= item[-1]
+            return res
+        else:
+            for item in items:
+                if item[0] == value: return item[-1]
+            return 0
+    
+    @classmethod
+    def from_int(cls, items, value, is_flag):
+        # Expects normalized items
+        if is_flag:
+            return {item[0] for item in items if item[-1] & value}
+        else:
+            for item in items:
+                if item[-1] == value: return item[0]
+            return None
+    
+    @staticmethod
+    def memorizer(func):
+        if hasattr(func, "is_enum_memorizer"): return func # already wrapped
+        
+        # Blender requires EXACTLY THE SAME string objects,
+        # otherwise there will be glitches (and possibly crashes?)
+        strings = {}
+        def checker(item):
+            for v in item:
+                if isinstance(v, str):
+                    s = strings.get(v)
+                    if s is None:
+                        s = str(v) # copy!
+                        strings[s] = s
+                    v = s
+                yield v
+        
+        items = []
+        def wrapper(self, context):
+            items.clear()
+            items.extend(tuple(checker(item)) for item in func(self, context))
+            return items
+        
+        wrapper.is_enum_memorizer = True
+        wrapper.items = items
+        
+        return wrapper
 
 # ===== PRIMITIVE ITEMS & PROP ===== #
 
@@ -869,33 +1060,6 @@ for item_name in dir(PrimitiveItem):
     if not item_name.startswith("_"):
         bpy.utils.register_class(getattr(PrimitiveItem, item_name))
 del item_name
-
-def enum_memorizer(func):
-    if hasattr(func, "is_enum_memorizer"): return func # already wrapped
-    
-    # Blender requires EXACTLY THE SAME string objects,
-    # otherwise there will be glitches (and possibly crashes?)
-    strings = {}
-    def checker(item):
-        for v in item:
-            if isinstance(v, str):
-                s = strings.get(v)
-                if s is None:
-                    s = str(v) # copy!
-                    strings[s] = s
-                v = s
-            yield v
-    
-    items = []
-    def wrapper(self, context):
-        items.clear()
-        items.extend(tuple(checker(item)) for item in func(self, context))
-        return items
-    
-    wrapper.is_enum_memorizer = True
-    wrapper.items = items
-    
-    return wrapper
 
 class prop:
     """
@@ -1013,7 +1177,7 @@ class prop:
         value_target = "default"
         vtype = type(value)
         
-        err_msg = "Unexpected property value {}; impossible to infer property type".format(repr(value))
+        err_msg = f"Unexpected property value {repr(value)}; impossible to infer property type"
         
         ptr_types = (bpy.types.PropertyGroup, bpy.types.ID)
         
@@ -1088,9 +1252,9 @@ class prop:
                 kwargs.pop(value_target, None)
             else:
                 kwargs[value_target] = value
-            prop_info = BpyProp((bpy_type, {}), True)
+            prop_info = BpyProp(bpy_type, {})
         else:
-            prop_info = BpyProp(value, True)
+            prop_info = BpyProp(value)
         
         if "extra" in kwargs:
             prop_info.extra = kwargs["extra"]
@@ -1098,32 +1262,11 @@ class prop:
         
         prop_info.update(kwargs)
         
-        if prop_info.type == bpy.props.EnumProperty:
+        if prop_info.function == bpy.props.EnumProperty:
             items = prop_info.get("items")
-            if callable(items): prop_info["items"] = enum_memorizer(items)
+            if callable(items): prop_info["items"] = BpyEnum.memorizer(items)
         
         return prop_info()
-    
-    @classmethod
-    def get_enum_icon_number(cls, v, v_len, is_icon, default=None):
-        if v_len <= 3: return default
-        if isinstance(v[3], str) == is_icon: return v[3]
-        if v_len <= 4: return default
-        if isinstance(v[4], str) == is_icon: return v[4]
-        return default
-    
-    @classmethod
-    def expand_enum_item(cls, v, id):
-        if isinstance(v, str): return (v, v, "", 'NONE', id)
-        
-        key = v[0]
-        v_len = len(v)
-        label = compress_whitespace(v[1] if v_len > 1 else key)
-        tip = compress_whitespace(v[2] if v_len > 2 else "")
-        icon = cls.get_enum_icon_number(v, v_len, True, 'NONE')
-        number = cls.get_enum_icon_number(v, v_len, False, id)
-        
-        return (key, label, tip, icon, number)
     
     @classmethod
     def complete_enum_items(cls, kwargs, value, enum_flag=False):
@@ -1134,15 +1277,21 @@ class prop:
             kwargs.setdefault("options", set()).add('ENUM_FLAG')
         
         items = kwargs.get("items", ())
+        
         if hasattr(items, "__iter__"): # sequence -> ensure full form
             # Note: empty items is a valid situation (e.g. when they are populated later)
-            items = [cls.expand_enum_item(v, (1 << id) if enum_flag else (id+1)) for id, v in enumerate(items)]
-            kwargs["items"] = items
-            if enum_flag:
-                value = (({value} if value else set()) if isinstance(value, str) else set(value))
-            elif (not value) and items: # empty string -> user doesn't care
-                value = items[0][0] # use first element as the default
-        else: # function -> everything is ok
+            
+            normalized_items = []
+            for item_value, item in BpyEnum.enumerate(items, enum_flag):
+                identifier, name, description, icon, item_value = BpyEnum.normalize_item(item, item_value)
+                name = compress_whitespace(name)
+                description = compress_whitespace(description)
+                normalized_items.append((identifier, name, description, icon, item_value))
+            
+            kwargs["items"] = normalized_items
+            
+            value = BpyEnum.normalize_value(normalized_items, value, enum_flag)
+        else: # function/callback -> default value should be None (?)
             value = None
         
         return value

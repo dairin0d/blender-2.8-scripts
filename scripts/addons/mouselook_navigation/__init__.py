@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 6, 2),
+    "version": (1, 6, 3),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -1378,13 +1378,13 @@ def background_timer_update():
 # Importantly, for this to be possible, we have to put them into a known category:
 # https://blender.stackexchange.com/questions/70697/how-to-allow-setting-hotkey-in-add-on
 
-# IMPORTANT: putting an operator in a standard (e.g. view3d.*) category is REQRUIRED for shortcut assignment to work
+# IMPORTANT: putting an operator in a standard (e.g. view3d.*) category is REQUIRED for shortcut assignment to work
 @addon.Operator.execute(idname="view3d.mouselook_navigation_toggle_enabled", label="Toggle Mouselook Navigation", description="Enable/disable Mouselook Navigation")
 def VIEW3D_OT_mouselook_navigation_toggle_enabled(self, context):
     settings.is_enabled = not settings.is_enabled
     BlUI.tag_redraw()
 
-# IMPORTANT: putting an operator in a standard (e.g. view3d.*) category is REQRUIRED for shortcut assignment to work
+# IMPORTANT: putting an operator in a standard (e.g. view3d.*) category is REQUIRED for shortcut assignment to work
 @addon.Operator.execute(idname="view3d.mouselook_navigation_toggle_trackball", label="Use Trackball", description="Use Trackball orbiting method")
 def VIEW3D_OT_mouselook_navigation_toggle_trackball(self, context):
     settings.is_trackball = not settings.is_trackball

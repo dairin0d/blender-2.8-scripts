@@ -34,7 +34,7 @@ from mathutils import Vector, Matrix, Quaternion, Euler, Color
 
 from .utils_python import ensure_baseclass, issubclass_safe, add_mixins, AttributeHolder, PrimitiveLock, binary_search, rmtree, os_remove_all
 from .utils_text import compress_whitespace, indent, unindent, split_camelcase
-from .bpy_inspect import BlRna, BpyProp, BpyOp, prop, enum_memorizer
+from .bpy_inspect import BlRna, BpyProp, BpyOp, prop
 from .utils_ui import messagebox, NestedLayout, BlUI
 from .utils_blender import BpyPath
 
@@ -527,20 +527,21 @@ class AddonManager:
                 "owner":owner,
             }
     
-    def type_extend(self, struct, prop_name, prop_info, owner=None):
+    def type_extend(self, struct, prop_name, bpy_prop, owner=None):
         if isinstance(struct, str): struct = getattr(bpy.types, struct)
-        if issubclass_safe(prop_info, bpy.types.PropertyGroup): prop_info = prop_info | prop()
+        if issubclass_safe(bpy_prop, bpy.types.PropertyGroup): bpy_prop = bpy_prop | prop()
         
         if self.__during_init("extend a type"):
-            self.objects_static_info.append(("type_extend", struct, prop_name, prop_info, owner))
+            self.objects_static_info.append(("type_extend", struct, prop_name, bpy_prop, owner))
         else:
             key = (struct, prop_name)
             
-            pg = prop_info[1].get("type")
+            prop_info = BpyProp(bpy_prop)
+            pg = prop_info.get("type")
             if pg and (pg.__name__.endswith(":AUTOREGISTER") or (pg in self.classes_new)):
                 self.__register_class(pg)
             
-            setattr(struct, prop_name, prop_info)
+            setattr(struct, prop_name, bpy_prop)
             
             self.objects[key] = {
                 "key":key,
@@ -664,20 +665,20 @@ class AddonManager:
         parents = list(parents)
         parents.append(cls)
         
-        for key, info in prop_infos.items():
+        for key, prop_info in prop_infos.items():
             # Do some autocompletion on property descriptors
-            if "name" not in info: info["name"] = bpy.path.display_name(key)
-            if "description" not in info: info["description"] = info["name"]
+            if "name" not in prop_info: prop_info["name"] = bpy.path.display_name(key)
+            if "description" not in prop_info: prop_info["description"] = prop_info["name"]
             
             # This is syntactic sugar for the case when callbacks
             # are defined later than the properties which use them.
             for callback_name in self.__prop_callbacks:
-                callback = info.get(callback_name)
+                callback = prop_info.get(callback_name)
                 if isinstance(callback, str):
-                    info[callback_name] = getattr(cls, callback)
+                    prop_info[callback_name] = getattr(cls, callback)
             
             # Make sure dependencies are registered first
-            pg = info.get("type")
+            pg = prop_info.get("type")
             if pg:
                 if pg in parents:
                     chain = ", ".join(parent.__name__ for parent in parents)+", "+pg.__name__
@@ -704,8 +705,8 @@ class AddonManager:
             raise
         
         # Add props back, this time as attributes only
-        for key, info in prop_infos.items():
-            setattr(cls, key, info())
+        for key, prop_info in prop_infos.items():
+            setattr(cls, key, prop_info())
     
     def __register_class_annotations(self, cls, prop_infos):
         # Put all bpy props into annotations (so that Blender won't complain)
@@ -714,9 +715,9 @@ class AddonManager:
             annotations = {}
             cls.__annotations__ = annotations
         
-        for key, info in prop_infos.items():
+        for key, prop_info in prop_infos.items():
             if key in cls.__dict__: delattr(cls, key)
-            if key not in annotations: annotations[key] = info()
+            if key not in annotations: annotations[key] = prop_info()
         
         try:
             bpy.utils.register_class(cls)
@@ -1082,18 +1083,21 @@ class AddonManager:
                     else:
                         bpy_prop = value | prop(**annotation)
                 except:
-                    return value
+                    bpy_prop = None
+                
+                if not bpy_prop:
+                    prop_info = BpyProp(value)
+                    if not prop_info: return value
+                    bpy_prop = value
+                    value = prop_info.get("default")
+                else:
+                    prop_info = BpyProp(bpy_prop)
                 
                 bpy_props.append((name, bpy_prop))
                 
-                if bpy_prop[0] == bpy.props.PointerProperty:
-                    return None
-                elif bpy_prop[0] == bpy.props.CollectionProperty:
-                    return [] # maybe use a collection emulator?
-                elif BpyProp.validate(value):
-                    return bpy_prop[1].get("default", BpyProp.known[bpy_prop[0]])
-                else:
-                    return value
+                if prop_info.function == bpy.props.PointerProperty: return None
+                if prop_info.function == bpy.props.CollectionProperty: return [] # maybe use a collection emulator?
+                return value
             
             if n_optional != 0:
                 defaults = list(defaults)
