@@ -148,12 +148,6 @@ def clamp_angle(ang, pi=math.pi):
     ang = (ang % twoPi)
     return ((ang - twoPi) if (ang > pi) else ang)
 
-# !!!!!!!!!!!!!!!!!!!!!!!!!!!!! TODO: check if Blender has a correct implementation now !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-def angle_axis_to_quat(angle, axis):
-    w = math.cos(angle / 2.0)
-    xyz = axis.normalized() * math.sin(angle / 2.0)
-    return Quaternion((w, xyz.x, xyz.y, xyz.z))
-
 def angle_signed(n, v0, v1, fallback=None):
     angle = v0.angle(v1, fallback)
     if (angle != fallback) and (angle > 0):
