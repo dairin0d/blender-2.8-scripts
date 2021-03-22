@@ -1529,6 +1529,11 @@ class NodeTreeComparer:
     def socket_key(cls, socket):
         default_value = (BlRna.serialize_value(socket.default_value)
             if hasattr(socket, "default_value") else None)
+        
+        # Make sure we have immutable values (for hashing)
+        if (socket.type in ('VECTOR', 'RGBA')) and (default_value is not None):
+            default_value = tuple(default_value)
+        
         return (socket.bl_idname, socket.identifier,
             socket.enabled, socket.type, default_value,
             tuple(cls.link_key(link) for link in socket.links))
