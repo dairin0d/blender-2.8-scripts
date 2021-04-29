@@ -18,7 +18,7 @@
 
 bl_info = {
     "name": "Cut / Copy / Paste",
-    "author": "dairin0d",
+    "author": "dairin0d, moth3r",
     "version": (2, 0, 0),
     "blender": (2, 80, 0),
     "location": "3D View",
