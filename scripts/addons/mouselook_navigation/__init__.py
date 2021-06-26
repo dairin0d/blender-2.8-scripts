@@ -64,7 +64,7 @@ dairin0d.load(globals(), {
 })
 
 from . import utils_navigation
-from .utils_navigation import trackball, apply_collisions, calc_selection_center
+from .utils_navigation import trackball, apply_collisions, get_selection_center
 
 addon = AddonManager()
 settings = addon.settings
@@ -1050,7 +1050,7 @@ class MouselookNavigation:
         
         self.explicit_orbit_origin = None
         if self.use_origin_selection:
-            self.explicit_orbit_origin = calc_selection_center(context, True)
+            self.explicit_orbit_origin = get_selection_center(context, True)
         elif self.use_origin_mouse:
             if cast_result.success:
                 self.explicit_orbit_origin = cast_result.location
@@ -1376,9 +1376,9 @@ def background_timer_update():
 @addon.Operator(idname="mouselook_navigation.subdivision_navigate", label="Navigate subdivision levels",
     description="Navigate subdivision levels", options={'REGISTER', 'UNDO'})
 class SubdivisionNavigate:
-    level: 0 | prop()
-    force: False | prop()
-    relative: True | prop()
+    level: 0 | prop("Level", "Subdivision level (or its increment)")
+    force: False | prop("Force", "Auto subdivide or remove higher levels")
+    relative: True | prop("Relative", "Add level to the modifier's current level")
     subdiv_type: 'CATMULL_CLARK' | prop("Subdivision method", "How to subdivide when adding a new level", items=[
         ('CATMULL_CLARK', "Catmull-Clark", "Use Catmull-Clark subdivision"),
         ('SIMPLE', "Simple", "Use simple subdivision"),
@@ -1388,7 +1388,13 @@ class SubdivisionNavigate:
     def execute(self, context):
         active_obj = BlUtil.Object.active_get(view_layer=context.view_layer)
         
-        objs = ([context.sculpt_object] if context.mode == 'SCULPT' else context.selected_objects)
+        if context.mode == 'OBJECT':
+            objs = context.selected_objects
+        elif BlEnums.mode_infos[context.mode].multi_object:
+            objs = set(context.selected_objects)
+            objs.add(context.active_object)
+        else:
+            objs = [context.active_object]
         
         for obj in context.selected_objects:
             modifier = self.get_modifier(obj)
@@ -1421,7 +1427,7 @@ class SubdivisionNavigate:
                 if modifier.type == 'SUBSURF': return modifier
             
             if self.force and (self.level > 0):
-                if obj.type == 'MESH':
+                if (obj.type == 'MESH') and (obj.mode == 'SCULPT'):
                     modifier = obj.modifiers.new("Multires", 'MULTIRES')
                 else:
                     modifier = obj.modifiers.new("Subdivision", 'SUBSURF')

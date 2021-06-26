@@ -28,11 +28,38 @@ import importlib.util
 exec(("" if importlib.util.find_spec("dairin0d") else "from . ")+"import dairin0d")
 
 dairin0d.load(globals(), {
+    "bpy_inspect": "BlEnums",
     "utils_ui": "BlUI",
     "utils_blender": "BlUtil",
 })
 
+last_selection_center = Vector()
+
+def get_selection_center(context, non_obj_zero=False):
+    global last_selection_center
+    selection_center = calc_selection_center(context, non_obj_zero)
+    if selection_center: last_selection_center = selection_center
+    return last_selection_center
+
 def calc_selection_center(context, non_obj_zero=False): # View3D area is assumed
+    depsgraph = context.evaluated_depsgraph_get()
+    
+    mode_info = BlEnums.mode_infos[context.mode]
+    
+    if mode_info.type not in ('EDIT', 'POSE'):
+        if context.mode == 'OBJECT':
+            objs = list(context.selected_objects)
+        elif mode_info.multi_object:
+            objs = set(context.selected_objects)
+            objs.add(context.active_object)
+        else:
+            objs = [context.active_object]
+        
+        if not objs: return None
+        
+        bbox = BlUtil.Depsgraph.bounding_box(depsgraph, objs=objs, origins='NON_GEOMETRY', use_bbox=True)
+        return Vector(bbox.center) # we need to return Vector, not a numpy array
+    
     cursor = context.scene.cursor
     
     # Note: view3d.snap_cursor_to_selected() (or, rather, its poll() method)
@@ -43,15 +70,7 @@ def calc_selection_center(context, non_obj_zero=False): # View3D area is assumed
     cursor.location = cursor_location_old
     
     success = ('FINISHED' in op_result) and all(math.isfinite(axis) for axis in cursor_location_new)
-    if success: return cursor_location_new
-    
-    active_object = context.active_object
-    is_object_mode = (context.mode == 'OBJECT') or (not active_object)
-    
-    if non_obj_zero and (not is_object_mode):
-        return active_object.matrix_world @ Vector()
-    
-    return None
+    return cursor_location_new if success else None
 
 # Virtual Trackball by Gavin Bell
 # Ok, simulate a track-ball.  Project the points onto the virtual

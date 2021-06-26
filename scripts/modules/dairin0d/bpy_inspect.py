@@ -1387,11 +1387,12 @@ class ObjectModeInfo:
     def __bool__(self):
         return (self.context in self.context_modes) and (self.object in self.object_modes)
     
-    def __init__(self, context, object, type, subtype=None):
+    def __init__(self, context, object, type, subtype, multi_object):
         self.context = context
         self.object = object
         self.type = type
         self.subtype = subtype
+        self.multi_object = multi_object
         
         name = (object if len(object) >= len(context) else context)
         name = name.replace("GPENCIL", "GREASE_PENCIL")
@@ -1467,68 +1468,68 @@ class BlEnums:
     
     object_infos = [
         ObjectTypeInfo('MESH', "Mesh", {'RENDERABLE':True, 'MODIFIERS':True}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
-            ('EDIT_MESH', 'EDIT', 'EDIT', 'MESH'),
-            ('SCULPT', 'SCULPT', 'SCULPT'),
-            ('PAINT_WEIGHT', 'WEIGHT_PAINT', 'PAINT', 'WEIGHT'),
-            ('PAINT_VERTEX', 'VERTEX_PAINT', 'PAINT', 'VERTEX'),
-            ('PAINT_TEXTURE', 'TEXTURE_PAINT', 'PAINT', 'TEXTURE'),
-            ('PARTICLE', 'PARTICLE_EDIT', 'EDIT', 'PARTICLE'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
+            ('EDIT_MESH', 'EDIT', 'EDIT', 'MESH', True),
+            ('SCULPT', 'SCULPT', 'SCULPT', None, False),
+            ('PAINT_WEIGHT', 'WEIGHT_PAINT', 'PAINT', 'WEIGHT', False),
+            ('PAINT_VERTEX', 'VERTEX_PAINT', 'PAINT', 'VERTEX', False),
+            ('PAINT_TEXTURE', 'TEXTURE_PAINT', 'PAINT', 'TEXTURE', False),
+            ('PARTICLE', 'PARTICLE_EDIT', 'EDIT', 'PARTICLE', False),
         ], {'MESH':True, 'GPENCIL':True, 'POINTCLOUD':True}),
         ObjectTypeInfo('CURVE', "Curve", {'RENDERABLE':True, 'MODIFIERS':True}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
-            ('EDIT_CURVE', 'EDIT', 'EDIT', 'CURVE'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
+            ('EDIT_CURVE', 'EDIT', 'EDIT', 'CURVE', True),
         ], {'MESH':True, 'GPENCIL':True}),
         ObjectTypeInfo('SURFACE', "SurfaceCurve", {'RENDERABLE':True, 'MODIFIERS':True}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
-            ('EDIT_SURFACE', 'EDIT', 'EDIT', 'SURFACE'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
+            ('EDIT_SURFACE', 'EDIT', 'EDIT', 'SURFACE', True),
         ], {'MESH':True}),
         ObjectTypeInfo('META', "MetaBall", {'RENDERABLE':True}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
-            ('EDIT_METABALL', 'EDIT', 'EDIT', 'META'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
+            ('EDIT_METABALL', 'EDIT', 'EDIT', 'META', True),
         ], {'MESH':True}),
         ObjectTypeInfo('FONT', "TextCurve", {'RENDERABLE':True, 'MODIFIERS':True}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
-            ('EDIT_TEXT', 'EDIT', 'EDIT', 'FONT'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
+            ('EDIT_TEXT', 'EDIT', 'EDIT', 'FONT', True),
         ], {'MESH':True, 'CURVE':True}),
         # HAIR? it is mentioned among Object.type enum values, but doesn't seem to be implemented so far
         ObjectTypeInfo('POINTCLOUD', "PointCloud", {'RENDERABLE':True, 'MODIFIERS':True}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
         ], {'MESH':True}),
         ObjectTypeInfo('VOLUME', "Volume", {'RENDERABLE':True, 'MODIFIERS':True}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
         ]),
         ObjectTypeInfo('GPENCIL', "GreasePencil", {'RENDERABLE':True, 'MODIFIERS':True}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
-            ('PAINT_GPENCIL', 'PAINT_GPENCIL', 'DRAW'),
-            ('EDIT_GPENCIL', 'EDIT_GPENCIL', 'EDIT', 'GPENCIL'),
-            ('SCULPT_GPENCIL', 'SCULPT_GPENCIL', 'SCULPT'),
-            ('WEIGHT_GPENCIL', 'WEIGHT_GPENCIL', 'PAINT', 'WEIGHT'),
-            ('VERTEX_GPENCIL', 'VERTEX_GPENCIL', 'PAINT', 'VERTEX'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
+            ('PAINT_GPENCIL', 'PAINT_GPENCIL', 'DRAW', None, False),
+            ('EDIT_GPENCIL', 'EDIT_GPENCIL', 'EDIT', 'GPENCIL', False),
+            ('SCULPT_GPENCIL', 'SCULPT_GPENCIL', 'SCULPT', None, False),
+            ('WEIGHT_GPENCIL', 'WEIGHT_GPENCIL', 'PAINT', 'WEIGHT', False),
+            ('VERTEX_GPENCIL', 'VERTEX_GPENCIL', 'PAINT', 'VERTEX', False),
         ]),
         ObjectTypeInfo('ARMATURE', "Armature", {}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
-            ('EDIT_ARMATURE', 'EDIT', 'EDIT', 'ARMATURE'),
-            ('POSE', 'POSE', 'POSE'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
+            ('EDIT_ARMATURE', 'EDIT', 'EDIT', 'ARMATURE', True),
+            ('POSE', 'POSE', 'POSE', None, True),
         ]),
         ObjectTypeInfo('LATTICE', "Lattice", {'MODIFIERS':True}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
-            ('EDIT_LATTICE', 'EDIT', 'EDIT', 'LATTICE'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
+            ('EDIT_LATTICE', 'EDIT', 'EDIT', 'LATTICE', True),
         ]),
         ObjectTypeInfo('EMPTY', None, {'RENDERABLE':True}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
         ]),
         ObjectTypeInfo('LIGHT', "Light", {'RENDERABLE':True}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
         ]),
         ObjectTypeInfo('LIGHT_PROBE', "LightProbe", {'RENDERABLE':True}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
         ]),
         ObjectTypeInfo('CAMERA', "Camera", {'RENDERABLE':True}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
         ]),
         ObjectTypeInfo('SPEAKER', "Speaker", {'RENDERABLE':True}, [
-            ('OBJECT', 'OBJECT', 'OBJECT'),
+            ('OBJECT', 'OBJECT', 'OBJECT', None, True),
         ]),
     ]
     # For some reason, python considers object_types to not be defined in the scope of this dict comprehension
