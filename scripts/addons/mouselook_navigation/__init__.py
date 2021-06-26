@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 6, 3),
+    "version": (1, 7, 0),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -1373,6 +1373,104 @@ def background_timer_update():
     
     return 0 # run each frame
 
+@addon.Operator(idname="mouselook_navigation.subdivision_navigate", label="Navigate subdivision levels",
+    description="Navigate subdivision levels", options={'REGISTER', 'UNDO'})
+class SubdivisionNavigate:
+    level: 0 | prop()
+    force: False | prop()
+    relative: True | prop()
+    subdiv_type: 'CATMULL_CLARK' | prop("Subdivision method", "How to subdivide when adding a new level", items=[
+        ('CATMULL_CLARK', "Catmull-Clark", "Use Catmull-Clark subdivision"),
+        ('SIMPLE', "Simple", "Use simple subdivision"),
+        ('LINEAR', "Linear", "Use linear interpolation of the sculpted displacement"),
+    ])
+    
+    def execute(self, context):
+        active_obj = BlUtil.Object.active_get(view_layer=context.view_layer)
+        
+        objs = ([context.sculpt_object] if context.mode == 'SCULPT' else context.selected_objects)
+        
+        for obj in context.selected_objects:
+            modifier = self.get_modifier(obj)
+            if not modifier: continue
+            
+            BlUtil.Object.active_set(obj, view_layer=context.view_layer)
+            
+            update = getattr(self, "update_"+modifier.type.lower(), None)
+            update(obj, modifier)
+        
+        BlUtil.Object.active_set(active_obj, view_layer=context.view_layer)
+        
+        BlUI.tag_redraw()
+        return {'FINISHED'}
+    
+    def get_modifier(self, obj):
+        if obj.type == 'GPENCIL':
+            for modifier in obj.grease_pencil_modifiers:
+                if modifier.type == 'GP_SUBDIV': return modifier
+            
+            if self.force and (self.level > 0):
+                modifier = obj.grease_pencil_modifiers.new("Subdivision", 'GP_SUBDIV')
+                modifier.level = 0
+                self.set_subdiv_type(modifier)
+                return modifier
+        elif obj.type in ('MESH', 'CURVE', 'SURFACE', 'FONT'):
+            for modifier in obj.modifiers:
+                # Multires is always first
+                if modifier.type == 'MULTIRES': return modifier
+                if modifier.type == 'SUBSURF': return modifier
+            
+            if self.force and (self.level > 0):
+                if obj.type == 'MESH':
+                    modifier = obj.modifiers.new("Multires", 'MULTIRES')
+                else:
+                    modifier = obj.modifiers.new("Subdivision", 'SUBSURF')
+                    modifier.levels = 0
+                self.set_subdiv_type(modifier)
+                return modifier
+        
+        return None
+    
+    def set_subdiv_type(self, modifier):
+        # So far, subdivision_type has only CATMULL_CLARK and SIMPLE options.
+        # Until Blender 2.83, GP_SUBDIV had a "simple" property instead.
+        if hasattr(modifier, "subdivision_type"):
+            subdiv_type = self.subdiv_type
+            if subdiv_type != 'CATMULL_CLARK': subdiv_type = 'SIMPLE'
+            modifier.subdivision_type = subdiv_type
+        elif hasattr(modifier, "simple"):
+            modifier.simple = (self.subdiv_type != 'CATMULL_CLARK')
+    
+    def set_level(self, modifier, prop_name):
+        prev_level = getattr(modifier, prop_name)
+        level = (max(prev_level + self.level, 0) if self.relative else max(self.level, 0))
+        if level == prev_level: return (0, 0)
+        setattr(modifier, prop_name, level)
+        curr_level = getattr(modifier, prop_name)
+        return (level - prev_level, level - curr_level)
+    
+    def update_multires(self, obj, modifier):
+        prop_name = ("sculpt_levels" if obj.mode == 'SCULPT' else "levels")
+        prev_delta, curr_delta = self.set_level(modifier, prop_name)
+        if not self.force: return
+        
+        if curr_delta > 0:
+            # Before Blender 2.90, object.multires_subdivide() had no parameters,
+            # and subdivision type was determined by MultiresModifier.subdivision_type.
+            # Since Blender 2.90, it has "modifier" and "mode" parameters instead.
+            op_rna = bpy.ops.object.multires_subdivide.get_rna_type()
+            kwargs = ({"mode": self.subdiv_type} if "mode" in op_rna.properties else {})
+            for i in range(curr_delta):
+                bpy.ops.object.multires_subdivide(modifier=modifier.name, **kwargs)
+        elif prev_delta < 0:
+            bpy.ops.object.multires_higher_levels_delete(modifier=modifier.name)
+    
+    def update_subsurf(self, obj, modifier):
+        self.set_level(modifier, "levels")
+    
+    def update_gp_subdiv(self, obj, modifier):
+        self.set_level(modifier, "level")
+
 # Blender's "Assign Shortcut" utility doesn't work with addon preferences and Internal-like
 # properties, so in order to allow users to assign shortcuts, we have to use operators.
 # Importantly, for this to be possible, we have to put them into a known category:
@@ -1901,7 +1999,6 @@ class ConfigureShortcutKeys:
         # Make sure we proceed only if invoke() was called earlier
         if not hasattr(self, "button_pointer"): return {'CANCELLED'}
         value = ", ".join(config_key.shortcut for config_key in self.config_keys if config_key.is_valid)
-        print(value)
         setattr(self.button_pointer, self.prop_id, value)
         BlUI.tag_redraw()
         return {'FINISHED'}
