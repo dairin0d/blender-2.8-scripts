@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 7, 0),
+    "version": (1, 7, 1),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -1374,19 +1374,50 @@ def background_timer_update():
     return 0 # run each frame
 
 @addon.Operator(idname="mouselook_navigation.subdivision_navigate", label="Navigate subdivision levels",
-    description="Navigate subdivision levels", options={'REGISTER', 'UNDO'})
+    description="Navigate subdivision levels")
 class SubdivisionNavigate:
     level: 0 | prop("Level", "Subdivision level (or its increment)")
-    force: False | prop("Force", "Auto subdivide or remove higher levels")
+    auto_subdivide: False | prop("Auto subdivide", "Automatically subdivide when necessary")
+    remove_higher: False | prop("Remove higher levels", "Remove higher levels")
     relative: True | prop("Relative", "Add level to the modifier's current level")
     subdiv_type: 'CATMULL_CLARK' | prop("Subdivision method", "How to subdivide when adding a new level", items=[
         ('CATMULL_CLARK', "Catmull-Clark", "Use Catmull-Clark subdivision"),
         ('SIMPLE', "Simple", "Use simple subdivision"),
         ('LINEAR', "Linear", "Use linear interpolation of the sculpted displacement"),
     ])
+    show_dialog: True | prop("Show dialog", "Show dialog with operator settings before executing")
+    
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "level")
+        layout.prop(self, "relative")
+        layout.prop(self, "auto_subdivide")
+        layout.prop(self, "remove_higher")
+        layout.prop(self, "subdiv_type")
+    
+    def invoke(self, context, event):
+        if not self.show_dialog: return self.execute(context)
+        return context.window_manager.invoke_props_dialog(self)
     
     def execute(self, context):
+        if context.mode == 'SCULPT':
+            bpy.ops.ed.undo_push(message="Sculpt state snapshot")
+        
         active_obj = BlUtil.Object.active_get(view_layer=context.view_layer)
+        
+        for obj, modifier, level, update in self.gather_targets(context):
+            BlUtil.Object.active_set(obj, view_layer=context.view_layer)
+            update(obj, modifier, level)
+        
+        BlUtil.Object.active_set(active_obj, view_layer=context.view_layer)
+        
+        bpy.ops.ed.undo_push(message=self.bl_label)
+        
+        BlUI.tag_redraw()
+        return {'FINISHED'}
+    
+    def gather_targets(self, context):
+        if getattr(self, "infos", None) is None: self.infos = {}
         
         if context.mode == 'OBJECT':
             objs = context.selected_objects
@@ -1396,26 +1427,30 @@ class SubdivisionNavigate:
         else:
             objs = [context.active_object]
         
-        for obj in context.selected_objects:
+        for obj in objs:
             modifier = self.get_modifier(obj)
             if not modifier: continue
             
-            BlUtil.Object.active_set(obj, view_layer=context.view_layer)
+            # In Sculpt mode, for some reason automatic undo doesn't affect
+            # multires levels, so we have to store the initial subdivision
+            # levels on the first run, and reuse them on re-runs.
+            key = (obj.name_full, modifier.name, modifier.type)
+            level = self.infos.get(key)
+            if level is None:
+                get_level = getattr(self, "get_level_"+modifier.type.lower(), None)
+                level = get_level(obj, modifier)
+                self.infos[key] = level
             
             update = getattr(self, "update_"+modifier.type.lower(), None)
-            update(obj, modifier)
-        
-        BlUtil.Object.active_set(active_obj, view_layer=context.view_layer)
-        
-        BlUI.tag_redraw()
-        return {'FINISHED'}
+            
+            yield (obj, modifier, level, update)
     
     def get_modifier(self, obj):
         if obj.type == 'GPENCIL':
             for modifier in obj.grease_pencil_modifiers:
                 if modifier.type == 'GP_SUBDIV': return modifier
             
-            if self.force and (self.level > 0):
+            if self.auto_subdivide and (self.level > 0):
                 modifier = obj.grease_pencil_modifiers.new("Subdivision", 'GP_SUBDIV')
                 modifier.level = 0
                 self.set_subdiv_type(modifier)
@@ -1426,7 +1461,7 @@ class SubdivisionNavigate:
                 if modifier.type == 'MULTIRES': return modifier
                 if modifier.type == 'SUBSURF': return modifier
             
-            if self.force and (self.level > 0):
+            if self.auto_subdivide and (self.level > 0):
                 if (obj.type == 'MESH') and (obj.mode == 'SCULPT'):
                     modifier = obj.modifiers.new("Multires", 'MULTIRES')
                 else:
@@ -1447,20 +1482,21 @@ class SubdivisionNavigate:
         elif hasattr(modifier, "simple"):
             modifier.simple = (self.subdiv_type != 'CATMULL_CLARK')
     
-    def set_level(self, modifier, prop_name):
+    def set_level(self, modifier, prop_name, initial_level):
+        level = (max(initial_level + self.level, 0) if self.relative else max(self.level, 0))
         prev_level = getattr(modifier, prop_name)
-        level = (max(prev_level + self.level, 0) if self.relative else max(self.level, 0))
-        if level == prev_level: return (0, 0)
         setattr(modifier, prop_name, level)
         curr_level = getattr(modifier, prop_name)
         return (level - prev_level, level - curr_level)
     
-    def update_multires(self, obj, modifier):
+    def get_level_multires(self, obj, modifier):
+        return (modifier.sculpt_levels if obj.mode == 'SCULPT' else modifier.levels)
+    
+    def update_multires(self, obj, modifier, initial_level):
         prop_name = ("sculpt_levels" if obj.mode == 'SCULPT' else "levels")
-        prev_delta, curr_delta = self.set_level(modifier, prop_name)
-        if not self.force: return
+        prev_delta, curr_delta = self.set_level(modifier, prop_name, initial_level)
         
-        if curr_delta > 0:
+        if self.auto_subdivide and (curr_delta > 0):
             # Before Blender 2.90, object.multires_subdivide() had no parameters,
             # and subdivision type was determined by MultiresModifier.subdivision_type.
             # Since Blender 2.90, it has "modifier" and "mode" parameters instead.
@@ -1468,14 +1504,20 @@ class SubdivisionNavigate:
             kwargs = ({"mode": self.subdiv_type} if "mode" in op_rna.properties else {})
             for i in range(curr_delta):
                 bpy.ops.object.multires_subdivide(modifier=modifier.name, **kwargs)
-        elif prev_delta < 0:
+        elif self.remove_higher and (prev_delta < 0):
             bpy.ops.object.multires_higher_levels_delete(modifier=modifier.name)
     
-    def update_subsurf(self, obj, modifier):
-        self.set_level(modifier, "levels")
+    def get_level_subsurf(self, obj, modifier):
+        return modifier.levels
     
-    def update_gp_subdiv(self, obj, modifier):
-        self.set_level(modifier, "level")
+    def update_subsurf(self, obj, modifier, initial_level):
+        self.set_level(modifier, "levels", initial_level)
+    
+    def get_level_gp_subdiv(self, obj, modifier):
+        return modifier.level
+    
+    def update_gp_subdiv(self, obj, modifier, initial_level):
+        self.set_level(modifier, "level", initial_level)
 
 # Blender's "Assign Shortcut" utility doesn't work with addon preferences and Internal-like
 # properties, so in order to allow users to assign shortcuts, we have to use operators.
