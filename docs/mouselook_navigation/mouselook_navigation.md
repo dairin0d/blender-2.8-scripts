@@ -12,6 +12,8 @@
   * [Keymap management](#keymap-management)
   * [List of keymap configurations](#list-of-keymap-configurations)
   * [Keymap-specific options](#keymap-specific-options)
+* [Extras](#extras)
+  * [Subdivision level navigation](#subdivision-level-navigation)
 * [Known issues](#known-issues)
 
 ## Overview
@@ -28,6 +30,7 @@ The addon attempts to provide better usability and customization of basic 3D vie
 * Option to more easily prevent accidental viewport rotation in Ortho projection
 * Option to auto-level the view when it's tilted
 * Different turntable/trackball algorithms and different fly mode (more FPS-like)
+* Subdivision level navigation operator
 
 ### 3D Viewport
 
@@ -77,7 +80,11 @@ The addon attempts to provide better usability and customization of basic 3D vie
   * **Object modes** - in which object modes geometry detection should be used
   * **Radius** - distance (in pixels) to the nearest geometry, above which ZBrush navigation is allowed
 * **Orbit snap** (options for angle snapping during orbiting)
-  * **To Ortho** - if this and Blender's *Auto Perspective* preference are enabled, orbit snapping would switch the view to the Orthographic mode.
+  * **Projection** - if Blender's *Auto Perspective* preference is enabled, orbit snapping would switch the view to Orthographic or Perspective mode
+    * *Don't change projection* - stay in the original projection mode
+    * *Blender's projection* - use Blender's default Auto Perspective behavior
+    * *ON: Ortho, OFF: Perspective* - switch to Orthographic when snapping, and to Perspective otherwise
+    * *ON: Ortho, OFF: Original* - switch to Orthographic when snapping, and to the initial projection mode otherwise
   * **Subdivs** - number of intermediate angles to which the view rotation can be snapped (1 snaps to each 90 degrees, 2 snaps to each 45 degrees, and so on)
 * **Trackball** (options related to Trackball mode)
   * **Trackball mode** - which trackball algorithm to use
@@ -161,6 +168,23 @@ This section shows options for the selected keymap configuration (or the default
   * **Crouch** - "crouch" in Walk mode (when gravity is on)
   * **Jump** - "jump"/"jetpack" in Walk mode (automatically switches on gravity)
   * **Teleport** - "teleport"/"grappling hook" in Walk mode
+
+## Extras
+
+### Subdivision level navigation
+
+![Subdivision level navigation](subdivision-navigation.png)
+
+This is an operator for "navigating" between subdivision levels of *Multires / Subsurf / Subdivide* modifiers on selected objects (Blender has a similar operator called "Subdivision Set", but with fewer options). If you want to [make a shortcut](https://docs.blender.org/manual/en/latest/editors/preferences/keymap.html) for it, use the *mouselook_navigation.subdivision_navigate* operator identifier.
+
+Warning: if you use Blender versions earlier than 2.93, you may encounter problems when trying to undo the effects of this operator in Sculpt mode.
+
+* *Level* - the target subdivision level (if *Relative* is off) or subdivision level offset (if *Relative* is on)
+* *Relative* - whether to set a specific subdivision level or to increment/decrement it
+* *Auto subdivide* - automatically subdivide when necessary; also adds a subdivision modifier if the object has none (*Multiresolution* for Mesh objects in Sculpt mode, *Subdivide* for Grease Pencil objects, *Subdivision Surface* in other cases)
+* *Remove higher levels* - if level is decremented, remove all higher levels
+* *Subdivision method* - which method to use for subdividing
+* *Show dialog* (keymap-only option) - whether to show the dialog with options or to execute the operator immediately
 
 ## Known issues
 
