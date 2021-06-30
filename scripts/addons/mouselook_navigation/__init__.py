@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 7, 1),
+    "version": (1, 7, 2),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -405,7 +405,8 @@ class MouselookNavigation:
         flips = settings.flips
         
         use_zoom_to_mouse |= self.force_origin_mouse
-        use_auto_perspective &= self.rotation_snap_autoperspective
+        
+        use_auto_perspective &= (self.rotation_snap_projection_mode != 'NONE')
         
         use_zoom_to_mouse |= (self.use_origin_selection and self.zoom_to_selection)
         
@@ -607,6 +608,12 @@ class MouselookNavigation:
                 
                 if (event.type == 'MOUSEMOVE') or (event.type == 'INBETWEEN_MOUSEMOVE'):
                     if mode == 'ORBIT':
+                        # If we were in an ortho side-view, Blender will continue
+                        # drawing vertical grid unless we trigger some kind of update
+                        # NOTE: view3d.view_orbit also automatically switches to
+                        # Perspective if Auto Perspective is enabled
+                        bpy.ops.view3d.view_orbit(angle=0.0, type='ORBITUP')
+                        
                         # snapping trackball rotation is problematic (I don't know how to do it)
                         if (not self.is_trackball) or is_orbit_snap:
                             self.change_euler(mouse_delta.y * speed_euler.y, mouse_delta.x * speed_euler.x, 0)
@@ -618,7 +625,12 @@ class MouselookNavigation:
                             self.change_rot_mouse(mouse_delta, mouse, speed_rot, trackball_mode)
                         
                         if use_auto_perspective:
-                            self.sv.is_perspective = not is_orbit_snap
+                            if self.rotation_snap_projection_mode == 'ORTHO_PERSPECTIVE':
+                                self.sv.is_perspective = not is_orbit_snap
+                            elif self.rotation_snap_projection_mode == 'ORTHO_ORIGINAL':
+                                self.sv.is_perspective = (False if is_orbit_snap else self._perspective0)
+                        else:
+                            self.sv.is_perspective = self._perspective0
                         
                         if is_orbit_snap:
                             self.snap_rotation(self.rotation_snap_subdivs)
@@ -1102,7 +1114,7 @@ class MouselookNavigation:
         self.fps_speed_modifier = settings.fps_speed_modifier
         self.zoom_speed_modifier = settings.zoom_speed_modifier
         self.rotation_snap_subdivs = settings.rotation_snap_subdivs
-        self.rotation_snap_autoperspective = settings.rotation_snap_autoperspective
+        self.rotation_snap_projection_mode = settings.rotation_snap_projection_mode
         self.rotation_speed_modifier = settings.rotation_speed_modifier
         self.autolevel_trackball = settings.autolevel_trackball
         self.autolevel_trackball_up = settings.autolevel_trackball_up
@@ -1393,7 +1405,9 @@ class SubdivisionNavigate:
         layout.prop(self, "relative")
         layout.prop(self, "auto_subdivide")
         layout.prop(self, "remove_higher")
-        layout.prop(self, "subdiv_type")
+        row = layout.row()
+        row.label(text="Subdivision method")
+        row.prop(self, "subdiv_type", text="")
     
     def invoke(self, context, event):
         if not self.show_dialog: return self.execute(context)
@@ -2185,7 +2199,13 @@ class ThisAddonPreferences:
         ('CENTER', 'Center'),
     ])
     rotation_snap_subdivs: 2 | prop("Orbit snap subdivs", "Intermediate angles used when snapping (1: 90°, 2: 45°, 3: 30°, etc.)", min=1)
-    rotation_snap_autoperspective: True | prop("Orbit snap->ortho", "If Auto Perspective is enabled, rotation snapping will automatically switch the view to Ortho")
+    rotation_snap_projection_mode: 'DEFAULT' | prop("Projection snapping mode",
+        "If Auto Perspective is enabled, switch the view to Ortho or Perspective when snapping", items=[
+        ('NONE', "Don't change projection", "Stay in the original projection mode"),
+        ('DEFAULT', "Blender's projection", "Use Blender's default Auto Perspective behavior"),
+        ('ORTHO_PERSPECTIVE', "ON: Ortho, OFF: Perspective", "Switch to Ortho when snapping, and to Perspective otherwise"),
+        ('ORTHO_ORIGINAL', "ON: Ortho, OFF: Original", "Switch to Ortho when snapping, and to the initial projection mode otherwise"),
+    ])
     autolevel_trackball: False | prop("Trackball Autolevel", "Autolevel in Trackball mode")
     autolevel_trackball_up: False | prop("Trackball Autolevel up", "Try to autolevel 'upright' in Trackball mode")
     autolevel_speed_modifier: 0.0 | prop("Autolevel speed", "Autoleveling speed", min=0.0)
@@ -2282,7 +2302,7 @@ class ThisAddonPreferences:
             
             with layout.row()(alignment='LEFT'):
                 layout.label(text="Orbit snap:")
-                layout.prop(self, "rotation_snap_autoperspective", text="To Ortho", toggle=True)
+                layout.prop(self, "rotation_snap_projection_mode", text="")
                 with layout.row()(scale_x=0.85):
                     layout.prop(self, "rotation_snap_subdivs", text="Subdivs")
             
