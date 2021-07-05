@@ -187,7 +187,7 @@ class AddonManager:
             module_name = os.path.splitext(os.path.basename(_path))[0]
             config_path = cls._textblock_prefix
         else:
-            config_path = bpy.utils.user_resource('CONFIG', module_name)
+            config_path = bpy.utils.user_resource('CONFIG', path=module_name)
         
         name = name or _name
         path = path or _path
