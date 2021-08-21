@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 7, 3),
+    "version": (1, 7, 4),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -690,8 +690,10 @@ class MouselookNavigation:
         self.modes_state[mode] = (self.sv.is_perspective, self.sv.distance, self.pos.copy(), self.rot.copy(), self.euler.copy())
         
         self.update_cursor_icon(context)
-        txt = "{} (zoom={:.3f})".format(mode, self.sv.distance)
-        context.area.header_text_set(txt)
+        
+        if settings.override_header:
+            txt = "{} (zoom={:.3f})".format(mode, self.sv.distance)
+            context.area.header_text_set(txt)
         
         if confirm:
             self.cleanup(context)
@@ -2115,7 +2117,9 @@ class ThisAddonPreferences:
         ('ABOUT', "About", "About"),
     ])
     
-    show_in_header: True | prop("Show in header", f"Show Mouselook Navigation icons in the 3D view's header")
+    override_header: True | prop("Info in header", "Show mode and zoom info in header during the navigation")
+    
+    show_in_header: True | prop("Buttons in header", "Show Mouselook Navigation icons in the 3D view's header")
     
     pass_through: False | prop("Non-blocking", "Other operators can be used while navigating")
     
@@ -2252,6 +2256,7 @@ class ThisAddonPreferences:
         with layout.box():
             with layout.row():
                 layout.label(text="UI:")
+                layout.prop(self, "override_header", toggle=True)
                 layout.prop(self, "show_in_header", toggle=True)
                 layout.prop(self, "use_blender_colors", toggle=True)
             

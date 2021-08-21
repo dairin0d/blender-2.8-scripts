@@ -51,7 +51,8 @@ The addon attempts to provide better usability and customization of basic 3D vie
 ![Settings](preferences-settings.png)
 
 ### **UI** section
-* **Show in header** - whether to display Mouselook Navigation buttons in 3D Viewport's header
+* **Info in header** - whether to display mode and zoom info in 3D Viewport's header during the navigation
+* **Buttons in header** - whether to display Mouselook Navigation buttons in 3D Viewport's header
 * **Use Blender's colors** - if enabled, Blender's *3D Viewport\View Overlay* theme color is used for crosshair and for ZBrush border
 * **Crosshair** - whether to display the crosshair
   * **Focus Point** - whether to display the viewport's focus point (when it's not the same as the current orbit point)
