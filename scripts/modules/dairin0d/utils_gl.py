@@ -63,8 +63,8 @@ def initialize():
     
     shader_from_builtin = gpu.shader.from_builtin
     
-    blf_options = {'ROTATION':blf.ROTATION, 'CLIPPING':blf.CLIPPING, 'SHADOW':blf.SHADOW,
-        'KERNING_DEFAULT':blf.KERNING_DEFAULT, 'WORD_WRAP':blf.WORD_WRAP, 'MONOCHROME':blf.MONOCHROME}
+    blf_option_names = ['ROTATION', 'CLIPPING', 'SHADOW', 'KERNING_DEFAULT', 'WORD_WRAP', 'MONOCHROME']
+    blf_options = {name : getattr(blf, name) for name in blf_option_names if hasattr(blf, name)}
     
     blf_load = blf.load
     blf_unload = blf.unload
@@ -326,8 +326,10 @@ def initialize():
         
         # enable / disable options
         def enable(self, option):
+            if option not in blf_options: return
             blf_enable(self.font, blf_options[option])
         def disable(self, option):
+            if option not in blf_options: return
             blf_disable(self.font, blf_options[option])
         
         # set shadow
