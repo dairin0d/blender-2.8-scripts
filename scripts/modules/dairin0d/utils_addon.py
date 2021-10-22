@@ -144,16 +144,6 @@ class AddonManager:
         module_locals = None
         module_name = None
         
-        def fix_doc_url(info):
-            has_doc = "doc_url" in info
-            has_wiki = "wiki_url" in info
-            if bpy.app.version >= (2, 83, 0):
-                if has_wiki and not has_doc:
-                    info["doc_url"] = info.pop("wiki_url")
-            else:
-                if has_doc and not has_wiki:
-                    info["wiki_url"] = info.pop("doc_url")
-        
         for frame_record in reversed(inspect.stack()):
             # Frame record is a tuple of 6 elements:
             # (frame_obj, filename, line_id, func_name, context_lines, context_line_id)
@@ -168,7 +158,6 @@ class AddonManager:
             
             info = frame.f_globals.get("bl_info")
             if info:
-                fix_doc_url(info)
                 module_globals = frame.f_globals
                 module_locals = frame.f_locals
                 module_name = module_globals.get("__name__", "").split(".")[0]

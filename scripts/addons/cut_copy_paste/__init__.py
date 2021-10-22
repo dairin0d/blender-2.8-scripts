@@ -19,12 +19,13 @@
 bl_info = {
     "name": "Cut / Copy / Paste",
     "author": "dairin0d, moth3r",
-    "version": (2, 0, 2),
+    "version": (2, 0, 3),
     "blender": (2, 80, 0),
     "location": "3D View",
     "description": "Advanced cut/copy/paste for objects and elements",
     "warning": "",
     "wiki_url": "https://github.com/dairin0d/blender-2.8-scripts/blob/master/docs/cut_copy_paste/cut_copy_paste.md",
+    "doc_url": "https://github.com/dairin0d/blender-2.8-scripts/blob/master/docs/cut_copy_paste/cut_copy_paste.md",
     "tracker_url": "https://github.com/dairin0d/blender-2.8-scripts/issues/new?labels=cut+copy+paste",
     "category": "3D View",
 }

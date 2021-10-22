@@ -19,12 +19,13 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 7, 4),
+    "version": (1, 7, 5),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
     "warning": "Beta version",
     "wiki_url": "https://github.com/dairin0d/blender-2.8-scripts/blob/master/docs/mouselook_navigation/mouselook_navigation.md",
+    "doc_url": "https://github.com/dairin0d/blender-2.8-scripts/blob/master/docs/mouselook_navigation/mouselook_navigation.md",
     "tracker_url": "https://github.com/dairin0d/blender-2.8-scripts/issues/new?labels=mouselook+navigation",
     "category": "3D View"
 }
