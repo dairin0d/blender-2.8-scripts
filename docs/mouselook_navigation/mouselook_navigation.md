@@ -193,3 +193,4 @@ Warning: if you use Blender versions earlier than 2.93, you may encounter proble
 * Ortho-grid/quadview-clip/projection-name display is not updated
 * Blender's *Rotate Around Selection* behavior is not exactly replicated in scuplt/paint modes and when editing text-curves
 * Zooming/rotation around the last paint/sculpt stroke position is not supported
+* Panning is not possible when view is locked to 3D cursor (Blender does not provide a way to control this offset)
