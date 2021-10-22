@@ -77,7 +77,7 @@ The addon attempts to provide better usability and customization of basic 3D vie
   * **Geometry detection method** - how to detect the geometry under the mouse
     * *Raycast* - uses raycasting; can detect only mesh objects (*WARNING: causes problems in Sculpt mode*)
     * *Selection* - uses Blender's selection operator (*WARNING: causes problems in Sculpt mode*)
-    * *Z-buffer* - renders the viewport to a depth buffer (*WARNING: may potentially crash Blender, if other addons attempt to use wm.redraw_timer() in the same frame*)
+    * *Z-buffer* - renders the viewport to a depth buffer (*WARNING: triggers a full viewport redraw; may potentially crash Blender, if other addons attempt to use wm.redraw_timer() in the same frame*)
   * **Object modes** - in which object modes geometry detection should be used
   * **Radius** - distance (in pixels) to the nearest geometry, above which ZBrush navigation is allowed
 * **Orbit snap** (options for angle snapping during orbiting)
