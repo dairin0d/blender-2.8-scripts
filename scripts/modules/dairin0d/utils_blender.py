@@ -1318,11 +1318,11 @@ class BlUtil:
                 
                 if use_relpath:
                     try:
-                        image.filepath_raw = bpy.path.relpath(image.filepath_raw)
+                        image.filepath_raw = BpyPath.relpath(image.filepath_raw)
                     except ValueError:
                         pass # Can't always find relative path (e.g. between drive letters on Windows)
                 elif use_abspath:
-                    image.filepath_raw = bpy.path.abspath(image.filepath_raw)
+                    image.filepath_raw = BpyPath.abspath(image.filepath_raw)
                 
                 if use_alpha_mode: image.alpha_mode = alpha_mode
                 
@@ -2533,6 +2533,64 @@ class BpyPath:
         dir_part_strip = dir_part.rstrip("/")
         if dir_part_strip: dir_part = dir_part[:len(dir_part_strip)]
         return (dir_part, file_part)
+    
+    @staticmethod
+    def abspath(path, *, start=None, library=None):
+        return bpy.path.abspath(path, start=start, library=library)
+    
+    @staticmethod
+    def relpath(path):
+        try:
+            # May cause ValueError if path is on a
+            # different mount that the current .blend
+            return bpy.path.replath(path)
+        except ValueError:
+            return path
+    
+    @staticmethod
+    def clean_name(name, *, replace='_'):
+        return bpy.path.clean_name(name, replace=replace)
+    
+    @staticmethod
+    def display_name(name, *, has_ext=True, title_case=True):
+        # title_case argument was introduced in Blender 2.93
+        # Unlike title(), it modifies only lowercase letters
+        name = bpy.path.display_name(name, has_ext=has_ext)
+        if title_case:
+            name = "".join((t if c.islower() else c) for c, t in zip(name, name.title()))
+        return name
+    
+    @staticmethod
+    def display_name_to_filepath(name):
+        return bpy.path.display_name_to_filepath(name)
+    
+    @staticmethod
+    def display_name_from_filepath(name):
+        return bpy.path.display_name_from_filepath(name)
+    
+    @staticmethod
+    def ensure_ext(filepath, ext, *, case_sensitive=False):
+        return bpy.path.ensure_ext(filepath, ext, case_sensitive=case_sensitive)
+    
+    @staticmethod
+    def is_subdir(path, directory):
+        return bpy.path.is_subdir(path, directory)
+    
+    @staticmethod
+    def module_names(path, *, recursive=False):
+        return bpy.path.module_names(path, recursive=False)
+    
+    @staticmethod
+    def native_pathsep(path):
+        return bpy.path.native_pathsep(path)
+    
+    @staticmethod
+    def reduce_dirs(dirs):
+        return bpy.path.reduce_dirs(dirs)
+    
+    @staticmethod
+    def resolve_ncase(path):
+        return bpy.path.resolve_ncase(path)
     
     @staticmethod
     def dirname(path):

@@ -195,7 +195,7 @@ class AddonManager:
             path = cls._textblock_prefix
         
         if not config:
-            config = (bpy.path.clean_name(module_name) if is_textblock else "config") + ".json"
+            config = (BpyPath.clean_name(module_name) if is_textblock else "config") + ".json"
         
         config_path = os.path.join(config_path, config)
         
@@ -656,7 +656,7 @@ class AddonManager:
         
         for key, prop_info in prop_infos.items():
             # Do some autocompletion on property descriptors
-            if "name" not in prop_info: prop_info["name"] = bpy.path.display_name(key)
+            if "name" not in prop_info: prop_info["name"] = BpyPath.display_name(key)
             if "description" not in prop_info: prop_info["description"] = prop_info["name"]
             
             # This is syntactic sugar for the case when callbacks
@@ -977,7 +977,7 @@ class AddonManager:
         if (not hasattr(cls, "bl_idname")) and is_operator:
             cls.bl_idname = ".".join(p.lower() for p in cls.__name__.rsplit("_OT_", 1))
         
-        if not hasattr(cls, "bl_label"): cls.bl_label = bpy.path.clean_name(cls.__name__)
+        if not hasattr(cls, "bl_label"): cls.bl_label = BpyPath.clean_name(cls.__name__)
         
         if hasattr(cls, "bl_label"): cls.bl_label = compress_whitespace(cls.bl_label)
         

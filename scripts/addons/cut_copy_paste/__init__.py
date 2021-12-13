@@ -353,7 +353,7 @@ class ClipboardUtil:
     
     @classmethod
     def normpath(cls, path):
-        return os.path.normcase(bpy.path.abspath(path))
+        return os.path.normcase(BpyPath.abspath(path))
     
     @classmethod
     def get_library_path(cls, datablock):
@@ -1153,7 +1153,7 @@ class OperatorPaste:
             
             abs_path = path
             
-            if relative: path = bpy.path.relpath(path)
+            if relative: path = BpyPath.relpath(path)
             
             # Blend file's libriaries are not affected by Undo/Redo, so if the user
             # toggles the link_relative property after paste, it won't have any effect.
