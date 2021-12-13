@@ -2543,7 +2543,7 @@ class BpyPath:
         try:
             # May cause ValueError if path is on a
             # different mount that the current .blend
-            return bpy.path.replath(path)
+            return bpy.path.relpath(path)
         except ValueError:
             return path
     
