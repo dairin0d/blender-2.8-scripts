@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 7, 5),
+    "version": (1, 7, 6),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -1612,7 +1612,24 @@ def update_keymaps(activate=True):
 
 @addon.PropertyGroup
 class AutoRegKeymapInfo:
-    mode_names = ['3D View', 'Object Mode', 'Mesh', 'Curve', 'Armature', 'Metaball', 'Lattice', 'Font', 'Pose', 'Vertex Paint', 'Weight Paint', 'Image Paint', 'Sculpt', 'Particle']
+    mode_names = [
+        '3D View',
+        'Object Mode',
+        'Mesh',
+        'Curve',
+        'Armature',
+        'Metaball',
+        'Lattice',
+        'Font',
+        'Pose',
+        'Vertex Paint',
+        'Weight Paint',
+        'Image Paint',
+        'Sculpt',
+        'Particle',
+        'Grease Pencil',
+    ]
+    
     keymaps: {'3D View'} | prop("Keymaps", "To which keymaps this entry should be added", items=mode_names)
     value_type: "" | prop("Type of event", "Type of event")
     any: False | prop("Any", "Any modifier")
