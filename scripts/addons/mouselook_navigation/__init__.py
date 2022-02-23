@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 7, 6),
+    "version": (1, 7, 7),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -453,7 +453,7 @@ class MouselookNavigation:
         
         if (prev_mode in {'FLY', 'FPS'}) and (mode not in {'FLY', 'FPS'}):
             focus_proj = self.sv.focus_projected + region_pos
-            context.window.cursor_warp(focus_proj.x, focus_proj.y)
+            context.window.cursor_warp(int(focus_proj.x), int(focus_proj.y))
         
         # Attempt to match Blender's default speeds
         ZOOM_SPEED_COEF = -0.77
@@ -1253,10 +1253,10 @@ class MouselookNavigation:
         self.sv.lock_camera = self._lock_camera
         
         if self.mode_stack.mode is None:
-            context.window.cursor_warp(self.mouse0.x, self.mouse0.y)
+            context.window.cursor_warp(int(self.mouse0.x), int(self.mouse0.y))
         elif self.mode_stack.mode in {'FLY', 'FPS'}:
             focus_proj = self.sv.focus_projected + self.sv.region_rect().get("min", convert=Vector)
-            context.window.cursor_warp(focus_proj.x, focus_proj.y)
+            context.window.cursor_warp(int(focus_proj.x), int(focus_proj.y))
         
         if self.should_adjust_multires(context):
             for modifier in context.object.modifiers:

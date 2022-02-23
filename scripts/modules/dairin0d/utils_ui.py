@@ -75,9 +75,9 @@ if not hasattr(bpy.types, "WM_OT_messagebox"):
             confirm = self.args.get("confirm", False)
             
             if confirm:
-                return wm.invoke_props_dialog(self, width=width)
+                return wm.invoke_props_dialog(self, width=int(width))
             else:
-                return wm.invoke_popup(self, width=width)
+                return wm.invoke_popup(self, width=int(width))
         
         def draw(self, context):
             layout = self.layout

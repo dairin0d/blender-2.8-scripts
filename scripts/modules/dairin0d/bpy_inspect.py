@@ -1479,6 +1479,9 @@ class BlEnums:
         ObjectTypeInfo('CURVE', "Curve", {'RENDERABLE':True, 'MODIFIERS':True}, [
             ('OBJECT', 'OBJECT', 'OBJECT', None, True),
             ('EDIT_CURVE', 'EDIT', 'EDIT', 'CURVE', True),
+            # These are added in Blender 3.2, but don't seem to be actually used yet:
+            ('EDIT_CURVES', 'EDIT', 'EDIT', 'CURVE', True),
+            ('SCULPT_CURVES', 'SCULPT', 'SCULPT', None, False),
         ], {'MESH':True, 'GPENCIL':True}),
         ObjectTypeInfo('SURFACE', "SurfaceCurve", {'RENDERABLE':True, 'MODIFIERS':True}, [
             ('OBJECT', 'OBJECT', 'OBJECT', None, True),
