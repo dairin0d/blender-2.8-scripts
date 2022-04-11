@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 7, 7),
+    "version": (1, 7, 8),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -395,8 +395,7 @@ class MouselookNavigation:
         region_pos, region_size = self.sv.region_rect().get("min", "size", convert=Vector)
         
         userprefs = context.preferences
-        drag_threshold = userprefs.inputs.drag_threshold
-        move_threshold = userprefs.inputs.move_threshold
+        drag_threshold_mouse = userprefs.inputs.drag_threshold_mouse
         mouse_double_click_time = userprefs.inputs.mouse_double_click_time / 1000.0
         invert_mouse_zoom = userprefs.inputs.invert_mouse_zoom
         invert_wheel_zoom = userprefs.inputs.invert_zoom_wheel
@@ -429,6 +428,8 @@ class MouselookNavigation:
         mouse_offset = mouse - self.mouse0
         mouse_delta = mouse - mouse_prev
         mouse_region = mouse - region_pos
+        
+        self.use_deselect_on_click &= (mouse_offset.magnitude < drag_threshold_mouse)
         
         self.input_axis_stack.update()
         if self.input_axis_stack.mode == 'Y':
@@ -692,11 +693,16 @@ class MouselookNavigation:
         
         self.update_cursor_icon(context)
         
-        if settings.override_header:
+        if settings.override_header and not self.use_deselect_on_click:
             txt = "{} (zoom={:.3f})".format(mode, self.sv.distance)
             context.area.header_text_set(txt)
         
         if confirm:
+            if self.use_deselect_on_click:
+                self.revert_changes()
+                bpy.ops.view3d.select(deselect_all=True)
+                bpy.ops.ed.undo_push(message="Select")
+            
             self.cleanup(context)
             return {'FINISHED'}
         elif cancel:
@@ -975,6 +981,19 @@ class MouselookNavigation:
         else:
             context.window.cursor_modal_set('SCROLL_XY')
     
+    def is_deselect_on_click(self, event):
+        if self.zbrush_mode == 'NONE': return False
+        
+        click = event.value
+        if click not in ('PRESS', 'RELEASE'): click = 'CLICK'
+        
+        for kc, km, kmi in KeyMapUtils.search("view3d.select"):
+            if not kmi.active: continue
+            if not kmi.properties.deselect_all: continue
+            if KeyMapUtils.equal(kmi, event, click=click): return True
+        
+        return False
+    
     def invoke(self, context, event):
         wm = context.window_manager
         userprefs = context.preferences
@@ -998,6 +1017,8 @@ class MouselookNavigation:
             input_settings = settings.autoreg_keymaps[input_settings_id].input_settings
         
         self.copy_input_settings(input_settings, default_input_settings)
+        
+        self.use_deselect_on_click = self.is_deselect_on_click(event)
         
         self.sv = SmartView3D(context, use_matrix=True)
         

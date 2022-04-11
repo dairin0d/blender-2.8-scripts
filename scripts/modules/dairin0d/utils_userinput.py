@@ -299,14 +299,33 @@ class KeyMapUtils:
         return event_type
     
     @staticmethod
-    def equal(kmi, event, pressed_keys=[]):
-        """Test if event corresponds to the given keymap item"""
-        modifier_match = (kmi.key_modifier == 'NONE') or (kmi.key_modifier in pressed_keys)
-        modifier_match &= kmi.any or ((kmi.alt == event.alt) and (kmi.ctrl == event.ctrl)
+    def equal_modifiers(kmi, event, pressed_keys=[]):
+        modifiers_match = (kmi.key_modifier == 'NONE') or (kmi.key_modifier in pressed_keys)
+        modifiers_match &= kmi.any or ((kmi.alt == event.alt) and (kmi.ctrl == event.ctrl)
             and (kmi.shift == event.shift) and (kmi.oskey == event.oskey))
+        return modifiers_match
+    
+    @staticmethod
+    def equal_types(kmi, event):
         kmi_type = KeyMapUtils.normalize_event_type(kmi.type)
         event_type = KeyMapUtils.normalize_event_type(event.type)
-        return ((kmi_type == event_type) and (kmi.value == event.value) and modifier_match)
+        return (kmi_type == event_type)
+    
+    @staticmethod
+    def equal_values(kmi, event, click='CLICK'):
+        kmi_value = kmi.value
+        if kmi_value == 'CLICK': kmi_value = click
+        event_value = event.value
+        if event_value == 'CLICK': event_value = click
+        return (kmi_value == event_value)
+    
+    @staticmethod
+    def equal(kmi, event, pressed_keys=[], click='CLICK'):
+        """Test if event corresponds to the given keymap item"""
+        is_equal_types = KeyMapUtils.equal_types(kmi, event)
+        is_equal_values = KeyMapUtils.equal_values(kmi, event, click)
+        is_equal_modifiers = KeyMapUtils.equal_modifiers(kmi, event, pressed_keys)
+        return is_equal_types and is_equal_values and is_equal_modifiers
     
     @staticmethod
     def clear(ko):
