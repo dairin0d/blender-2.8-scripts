@@ -1074,7 +1074,7 @@ class MouselookNavigation:
         is_sculpt = (context.mode == 'SCULPT')
         is_dyntopo = False
         
-        ignore_raycast = context.mode not in settings.raycast_modes
+        ignore_raycast = (context.mode not in settings.raycast_modes) or (settings.zbrush_method == 'NONE')
         use_raycast = (not ignore_raycast) and (self.use_origin_mouse or self.use_origin_mouse_last or (self.zbrush_mode != 'NONE'))
         
         # If a mesh has face data, Blender will automatically disable dyntopo on re-entering sculpt mode
@@ -2240,6 +2240,7 @@ class ThisAddonPreferences:
     
     zbrush_radius: 0 | prop("Geometry detection radius", "Minimal required distance (in pixels) to the nearest geometry", min=0, max=64, subtype='PIXEL')
     zbrush_method: 'ZBUFFER' | prop("Geometry detection method", "Which method to use to determine if mouse is over empty space", items=[
+        ('NONE', "Disabled", "Ignore navigation attempts in the central area of the viewport (outside of the ZBrush border)"),
         ('RAYCAST', "Raycast", "WARNING: causes problems in Sculpt mode"),
         ('SELECTION', "Selection", "WARNING: causes problems in Sculpt mode"),
         ('ZBUFFER', "Z-buffer", "WARNING: may potentially crash Blender, if other addons attempt to use wm.redraw_timer() in the same frame"),
