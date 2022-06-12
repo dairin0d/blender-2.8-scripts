@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 7, 8),
+    "version": (1, 7, 9),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -169,7 +169,7 @@ class MouselookNavigation_InputSettings:
         ('PREFS', "Origin: Auto", "Determine orbit origin from Blender's preferences"),
         ('VIEW', "Origin: View", "Use 3D View's focus point"),
         ('MOUSE', "Origin: Mouse", "Orbit around the point under the mouse"),
-        ('LAST_MOUSE', "Origin: Last Mouse", "Orbit around the point under the last mouse click"),
+        ('LAST_MOUSE', "Origin: Last Mouse", "Orbit around the point under the last mouse click (works only in ZBrush mode)"),
         ('SELECTION', "Origin: Selection", "Orbit around the selection pivot"),
     ])
     
@@ -1094,6 +1094,7 @@ class MouselookNavigation:
             elif settings.zbrush_method == 'RAYCAST':
                 with ToggleObjectMode('OBJECT' if is_sculpt else None):
                     cast_result = self.sv.ray_cast(mouse_region, raycast_radius)
+        
         self.explicit_orbit_origin = None
         if self.use_origin_selection:
             self.explicit_orbit_origin = get_selection_center(context, True)
@@ -1107,6 +1108,7 @@ class MouselookNavigation:
                     self.sv.viewpoint = viewpoint
             else:
                 self.explicit_orbit_origin = self.sv.unproject(mouse_region)
+        
         if self.use_origin_mouse_last:
             if self.last_location is not None:
                 self.explicit_orbit_origin = self.last_location
