@@ -75,6 +75,7 @@ The addon attempts to provide better usability and customization of basic 3D vie
 * **Autolevel speed** - the speed of autolevelling
 * **Geometry detection** (affects the addon's behavior in ZBrush mode and/or when Blender's *Auto Depth* preference is enabled)
   * **Geometry detection method** - how to detect the geometry under the mouse
+    * *Disabled* - no geometry detection (in ZBrush mode, ignores navigation attempts in the central area of viewport)
     * *Raycast* - uses raycasting; can detect only mesh objects (*WARNING: causes problems in Sculpt mode*)
     * *Selection* - uses Blender's selection operator (*WARNING: causes problems in Sculpt mode*)
     * *Z-buffer* - renders the viewport to a depth buffer (*WARNING: triggers a full viewport redraw; may potentially crash Blender, if other addons attempt to use wm.redraw_timer() in the same frame*)
@@ -142,6 +143,7 @@ This section shows options for the selected keymap configuration (or the default
   * *Auto* - determine orbit origin from Blender's preferences
   * *View* - use 3D viewport's focus point
   * *Mouse* - orbit around the point under the mouse
+  * *Last Mouse* - orbit around the point under the last mouse click (works only in ZBrush mode)
   * *Selection* - orbit around the selection pivot
 * **Ortho unrotate** - if enabled and view projection is Orthographic, switching from Orbit to Pan/Dolly/Zoom will snap view rotation to its initial value and will disable switching to Orbit until the operator has finished
 * ***Navigation shortcuts*** (keys used during the navigation)
