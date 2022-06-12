@@ -2240,7 +2240,7 @@ class ThisAddonPreferences:
     
     zbrush_radius: 0 | prop("Geometry detection radius", "Minimal required distance (in pixels) to the nearest geometry", min=0, max=64, subtype='PIXEL')
     zbrush_method: 'ZBUFFER' | prop("Geometry detection method", "Which method to use to determine if mouse is over empty space", items=[
-        ('NONE', "Disabled", "Ignore navigation attempts in the central area of the viewport (outside of the ZBrush border)"),
+        ('NONE', "Disabled", "Don't use geometry detection (in ZBrush mode, ignores navigation attempts in the central area of viewport)"),
         ('RAYCAST', "Raycast", "WARNING: causes problems in Sculpt mode"),
         ('SELECTION', "Selection", "WARNING: causes problems in Sculpt mode"),
         ('ZBUFFER', "Z-buffer", "WARNING: may potentially crash Blender, if other addons attempt to use wm.redraw_timer() in the same frame"),
