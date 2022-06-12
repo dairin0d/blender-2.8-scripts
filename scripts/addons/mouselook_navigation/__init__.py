@@ -169,6 +169,7 @@ class MouselookNavigation_InputSettings:
         ('PREFS', "Origin: Auto", "Determine orbit origin from Blender's preferences"),
         ('VIEW', "Origin: View", "Use 3D View's focus point"),
         ('MOUSE', "Origin: Mouse", "Orbit around the point under the mouse"),
+        ('LAST_MOUSE', "Origin: Last Mouse", "Orbit around the point under the last mouse click"),
         ('SELECTION', "Origin: Selection", "Orbit around the selection pivot"),
     ])
     
@@ -327,7 +328,7 @@ class MouselookNavigation_InputSettings:
 @addon.Operator(idname="mouselook_navigation.navigate", label="Mouselook navigation", description="Mouselook navigation", options={'GRAB_CURSOR', 'BLOCKING'})
 class MouselookNavigation:
     input_settings_id: 0 | prop("Input Settings ID", "Input Settings ID", min=0)
-    
+    last_location = None    
     def copy_input_settings(self, input_settings, default_input_settings):
         def get_value(name):
             use_default = (input_settings is None) or (name not in input_settings.overrides)
@@ -1044,27 +1045,37 @@ class MouselookNavigation:
             self.force_origin_selection = True
             self.use_origin_mouse = False
             self.use_origin_selection = True
+            self.use_origin_mouse_last = False
         elif self.origin_mode == 'MOUSE':
             self.force_origin_mouse = True
             self.force_origin_selection = False
             self.use_origin_mouse = True
             self.use_origin_selection = False
+            self.use_origin_mouse_last = False
+        elif self.origin_mode == 'LAST_MOUSE':
+            self.force_origin_mouse = False
+            self.force_origin_selection = False
+            self.use_origin_mouse = False
+            self.use_origin_selection = False
+            self.use_origin_mouse_last = True
         elif self.origin_mode == 'VIEW':
             self.force_origin_mouse = False
             self.force_origin_selection = False
             self.use_origin_mouse = False
             self.use_origin_selection = False
+            self.use_origin_mouse_last = False
         else:
             self.force_origin_mouse = False
             self.force_origin_selection = False
             self.use_origin_mouse = userprefs.inputs.use_mouse_depth_navigate
             self.use_origin_selection = userprefs.inputs.use_rotate_around_active
+            self.use_origin_mouse_last = False
         
         is_sculpt = (context.mode == 'SCULPT')
         is_dyntopo = False
         
         ignore_raycast = context.mode not in settings.raycast_modes
-        use_raycast = (not ignore_raycast) and (self.use_origin_mouse or (self.zbrush_mode != 'NONE'))
+        use_raycast = (not ignore_raycast) and (self.use_origin_mouse or self.use_origin_mouse_last or (self.zbrush_mode != 'NONE'))
         
         # If a mesh has face data, Blender will automatically disable dyntopo on re-entering sculpt mode
         if is_sculpt and use_raycast and (settings.zbrush_method != 'ZBUFFER'):
@@ -1083,11 +1094,10 @@ class MouselookNavigation:
             elif settings.zbrush_method == 'RAYCAST':
                 with ToggleObjectMode('OBJECT' if is_sculpt else None):
                     cast_result = self.sv.ray_cast(mouse_region, raycast_radius)
-        
         self.explicit_orbit_origin = None
         if self.use_origin_selection:
             self.explicit_orbit_origin = get_selection_center(context, True)
-        elif self.use_origin_mouse:
+        elif self.use_origin_mouse or self.use_origin_mouse_last:
             if cast_result.success:
                 self.explicit_orbit_origin = cast_result.location
                 if self.sv.is_perspective:
@@ -1097,6 +1107,9 @@ class MouselookNavigation:
                     self.sv.viewpoint = viewpoint
             else:
                 self.explicit_orbit_origin = self.sv.unproject(mouse_region)
+        if self.use_origin_mouse_last:
+            if self.last_location is not None:
+                self.explicit_orbit_origin = self.last_location
         
         mode_keys = {'ORBIT':self.keys_orbit, 'PAN':self.keys_pan, 'DOLLY':self.keys_dolly, 'ZOOM':self.keys_zoom, 'FLY':self.keys_fly, 'FPS':self.keys_fps}
         self.mode_stack = ModeStack(mode_keys, self.allowed_transitions, self.default_mode, 'NONE')
@@ -1116,6 +1129,7 @@ class MouselookNavigation:
                     
                     if cast_result.success or ignore_raycast:
                         if is_dyntopo: bpy.ops.sculpt.dynamic_topology_toggle()
+                        MouselookNavigation.last_location = cast_result.location
                         return {'PASS_THROUGH'}
             
             if self.mode_stack.mode == 'NONE':
