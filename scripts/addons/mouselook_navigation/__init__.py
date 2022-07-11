@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 7, 9),
+    "version": (1, 7, 10),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -1232,46 +1232,40 @@ class MouselookNavigation:
         
         context = bpy.context
         view3d = context.space_data
+        scene = context.scene
         prefs_system = context.preferences.system
         
         # Important: if viewport_aa is not OFF, 1-frame artifacts may appear after bpy.ops.wm.redraw_timer()
+        # Also, some users report that there is much less lag when using the Workbench engine
         
-        viewport_aa = prefs_system.viewport_aa
-        show_relationship_lines = view3d.overlay.show_relationship_lines
-        show_motion_paths = view3d.overlay.show_motion_paths
-        show_reconstruction = view3d.show_reconstruction
-        show_gizmo = view3d.show_gizmo
-        shading_type = view3d.shading.type
-        show_xray = view3d.shading.show_xray
-        show_shadows = view3d.shading.show_shadows
-        show_cavity = view3d.shading.show_cavity
-        use_dof = view3d.shading.use_dof
+        # NOTE: engine affects shading type (and possibly other settings),
+        # so it has to be changed ~last and reverted ~first.
+        override_settings = [
+            (view3d.overlay, "show_relationship_lines", False),
+            (view3d.overlay, "show_motion_paths", False),
+            (view3d, "show_reconstruction", False),
+            (view3d, "show_gizmo", False),
+            (view3d.shading, "type", 'SOLID'),
+            (view3d.shading, "show_xray", False),
+            (view3d.shading, "show_shadows", False),
+            (view3d.shading, "show_cavity", False),
+            (view3d.shading, "use_dof", False),
+            (scene.render, "engine", 'BLENDER_WORKBENCH'),
+            (scene.display, "viewport_aa", 'OFF'),
+            (prefs_system, "viewport_aa", 'OFF'),
+        ]
         
-        prefs_system.viewport_aa = 'OFF'
-        view3d.overlay.show_relationship_lines = False
-        view3d.overlay.show_motion_paths = False
-        view3d.show_reconstruction = False
-        view3d.show_gizmo = False
-        view3d.shading.type = 'SOLID'
-        view3d.shading.show_xray = False
-        view3d.shading.show_shadows = False
-        view3d.shading.show_cavity = False
-        view3d.shading.use_dof = False
+        original_settings = []
+        for (target, propname, value) in override_settings:
+            original_settings.append((target, propname, getattr(target, propname)))
+            setattr(target, propname, value)
         
         handler = addon.draw_handler_add(bpy.types.SpaceView3D, draw_callback, (), 'WINDOW', 'POST_PIXEL')
         bpy.ops.wm.redraw_timer(type='DRAW', iterations=1)
         addon.remove(handler)
         
-        prefs_system.viewport_aa = viewport_aa
-        view3d.overlay.show_relationship_lines = show_relationship_lines
-        view3d.overlay.show_motion_paths = show_motion_paths
-        view3d.show_reconstruction = show_reconstruction
-        view3d.show_gizmo = show_gizmo
-        view3d.shading.type = shading_type
-        view3d.shading.show_xray = show_xray
-        view3d.shading.show_shadows = show_shadows
-        view3d.shading.show_cavity = show_cavity
-        view3d.shading.use_dof = use_dof
+        for (target, propname, value) in reversed(original_settings):
+            setattr(target, propname, value)
         
         return result["cast_result"]
     
