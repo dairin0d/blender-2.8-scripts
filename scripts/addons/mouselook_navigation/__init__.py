@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 7, 10),
+    "version": (1, 7, 11),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -1245,7 +1245,6 @@ class MouselookNavigation:
             (view3d.overlay, "show_motion_paths", False),
             (view3d, "show_reconstruction", False),
             (view3d, "show_gizmo", False),
-            (view3d.shading, "type", 'SOLID'),
             (view3d.shading, "show_xray", False),
             (view3d.shading, "show_shadows", False),
             (view3d.shading, "show_cavity", False),
@@ -1254,6 +1253,11 @@ class MouselookNavigation:
             (scene.display, "viewport_aa", 'OFF'),
             (prefs_system, "viewport_aa", 'OFF'),
         ]
+        
+        # Switching shading types in non-Workbench engine (especially in Sculpt mode)
+        # is costly, so do it only if absolutely necessary and only while in Workbench
+        if view3d.shading.type == 'WIREFRAME':
+            override_settings.append((view3d.shading, "type", 'SOLID'))
         
         original_settings = []
         for (target, propname, value) in override_settings:
