@@ -106,17 +106,20 @@ def apply_shapekeys(obj):
         # This seems to be the only way to remove a shape key
         bpy.ops.object.shape_key_remove(all=False)
 
-def apply_modifier(name, apply_as='DATA', keep_modifier=False):
+def apply_modifier(name, apply_as='DATA', keep_modifier=False, which='DEFAULT'):
     try:
-        # In Blender 2.90, the apply_as argument was removed from
-        # modifier_apply(), and modifier_apply_as_shapekey() was added
-        if bpy.app.version < (2, 90, 0):
-            bpy.ops.object.modifier_apply(modifier=name, apply_as=apply_as)
+        if which == 'GPENCIL':
+            bpy.ops.object.gpencil_modifier_apply(modifier=name, apply_as=apply_as)
         else:
-            if apply_as == 'SHAPE':
-                bpy.ops.object.modifier_apply_as_shapekey(modifier=name, keep_modifier=keep_modifier)
+            # In Blender 2.90, the apply_as argument was removed from
+            # modifier_apply(), and modifier_apply_as_shapekey() was added
+            if bpy.app.version < (2, 90, 0):
+                bpy.ops.object.modifier_apply(modifier=name, apply_as=apply_as)
             else:
-                bpy.ops.object.modifier_apply(modifier=name)
+                if apply_as == 'SHAPE':
+                    bpy.ops.object.modifier_apply_as_shapekey(modifier=name, keep_modifier=keep_modifier)
+                else:
+                    bpy.ops.object.modifier_apply(modifier=name)
         
         return 'APPLIED'
     except RuntimeError as exc:
@@ -126,14 +129,7 @@ def apply_modifier(name, apply_as='DATA', keep_modifier=False):
         is_disabled = ("disab" in exc_msg) or ("skip" in exc_msg)
         return ('DISABLED' if is_disabled else 'FAILED')
 
-def apply_modifiers(context, objects, idnames, options=(), apply_as='DATA'):
-    if not objects: return
-    
-    scene_objs = context.scene.collection.objects
-    layer_objs = context.view_layer.objects
-    active_obj = layer_objs.active
-    selection_prev = tuple(context.selected_objects)
-    
+def _apply_modifiers(obj, predicate, options=(), apply_as='DATA', which='DEFAULT'):
     covert_to_mesh = ('CONVERT_TO_MESH' in options)
     make_single_user = ('MAKE_SINGLE_USER' in options)
     remove_disabled = ('REMOVE_DISABLED' in options)
@@ -141,13 +137,69 @@ def apply_modifiers(context, objects, idnames, options=(), apply_as='DATA'):
     apply_shape_keys = ('APPLY_SHAPE_KEYS' in options)
     visible_only = ('VISIBLE_ONLY' in options)
     
+    objects_to_delete = set()
+    
+    if which == 'GPENCIL':
+        modifiers = obj.grease_pencil_modifiers
+        covert_to_mesh = False
+        delete_operands = False
+        apply_shape_keys = False
+    else:
+        modifiers = obj.modifiers
+    
+    # Users will probably want shape keys to be applied regardless of whether there are modifiers
+    if apply_shape_keys: apply_shapekeys(obj) # also makes single-user
+    
+    if not modifiers: return objects_to_delete
+    
+    if (obj.type != 'MESH') and covert_to_mesh:
+        # "Error: Cannot apply constructive modifiers on curve"
+        if obj.data.users > 1: obj.data = obj.data.copy() # don't affect other objects
+        convert_selection_to_mesh()
+    elif make_single_user:
+        # "Error: Modifiers cannot be applied to multi-user data"
+        if obj.data.users > 1: obj.data = obj.data.copy() # don't affect other objects
+    
+    for md in tuple(modifiers):
+        if not predicate(md): continue
+        
+        obj_to_delete = None
+        if delete_operands and (md.type == 'BOOLEAN'):
+            obj_to_delete = md.object
+        
+        successfully_applied = False
+        is_disabled = False
+        
+        if visible_only and not md.show_viewport:
+            is_disabled = True
+        else:
+            apply_result = apply_modifier(md.name, apply_as, which=which)
+            successfully_applied = (apply_result == 'APPLIED')
+            is_disabled = (apply_result == 'DISABLED')
+        
+        if is_disabled and remove_disabled:
+            modifiers.remove(md)
+        
+        if successfully_applied and obj_to_delete:
+            objects_to_delete.add(obj_to_delete)
+    
+    return objects_to_delete
+
+def apply_modifiers(context, objects, idnames, options=(), apply_as='DATA', which='DEFAULT'):
+    if not objects: return
+    
+    scene_objs = context.scene.collection.objects
+    layer_objs = context.view_layer.objects
+    active_obj = layer_objs.active
+    selection_prev = tuple(context.selected_objects)
+    
     if idnames is not None:
         if callable(idnames):
-            validate_idname = idnames
+            predicate = idnames
         else:
-            validate_idname = (lambda md: md.type in idnames)
+            predicate = (lambda md: md.type in idnames)
     else:
-        validate_idname = (lambda md: True)
+        predicate = (lambda md: True)
     
     objects_to_delete = set()
     
@@ -182,40 +234,7 @@ def apply_modifiers(context, objects, idnames, options=(), apply_as='DATA'):
             bpy.ops.object.mode_set(mode='OBJECT')
         
         if obj.mode == 'OBJECT':
-            # Users will probably want shape keys to be applied regardless of whether there are modifiers
-            if apply_shape_keys: apply_shapekeys(obj) # also makes single-user
-            
-            if obj.modifiers:
-                if (obj.type != 'MESH') and covert_to_mesh:
-                    # "Error: Cannot apply constructive modifiers on curve"
-                    if obj.data.users > 1: obj.data = obj.data.copy() # don't affect other objects
-                    convert_selection_to_mesh()
-                elif make_single_user:
-                    # "Error: Modifiers cannot be applied to multi-user data"
-                    if obj.data.users > 1: obj.data = obj.data.copy() # don't affect other objects
-                
-                for md in tuple(obj.modifiers):
-                    if not validate_idname(md): continue
-                    
-                    obj_to_delete = None
-                    if delete_operands and (md.type == 'BOOLEAN'):
-                        obj_to_delete = md.object
-                    
-                    successfully_applied = False
-                    is_disabled = False
-                    
-                    if visible_only and not md.show_viewport:
-                        is_disabled = True
-                    else:
-                        apply_result = apply_modifier(md.name, apply_as)
-                        successfully_applied = (apply_result == 'APPLIED')
-                        is_disabled = (apply_result == 'DISABLED')
-                    
-                    if is_disabled and remove_disabled:
-                        obj.modifiers.remove(md)
-                    
-                    if successfully_applied and obj_to_delete:
-                        objects_to_delete.add(obj_to_delete)
+            objects_to_delete.update(_apply_modifiers(obj, predicate, options, apply_as, which=which))
         
         BlUtil.Object.select_set(obj, False)
         if not in_scene: scene_objs.unlink(obj)
