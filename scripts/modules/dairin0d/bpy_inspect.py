@@ -46,6 +46,14 @@ class BlRna:
         "CollectionProperty":bpy.props.CollectionProperty,
     }
     
+    math_types = {
+        Color: tuple,
+        Euler: tuple,
+        Quaternion: tuple,
+        Vector: tuple,
+        Matrix: (lambda m: tuple(tuple(v) for v in m)),
+    }
+    
     def __new__(cls, obj):
         # Note: operator instances have both rna_type and bl_rna,
         # but actual user-defined properties are present only in rna_type
@@ -324,6 +332,8 @@ class BlRna:
                 value = [BlRna.serialize_value(item, recursive) for item in value]
             elif class_name == "bpy_prop_collection_idprop":
                 value = [BlRna.serialize_value(item, recursive) for item in value]
+            elif value_class in BlRna.math_types:
+                value = (BlRna.math_types[value_class](value) if json else value.copy().freeze())
         
         if json:
             if isinstance(value, set):
