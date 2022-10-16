@@ -129,6 +129,49 @@ def apply_modifier(name, apply_as='DATA', keep_modifier=False, which='DEFAULT'):
         is_disabled = ("disab" in exc_msg) or ("skip" in exc_msg)
         return ('DISABLED' if is_disabled else 'FAILED')
 
+def apply_constraint(name, owner='OBJECT', mode='DELETE'):
+    if mode == 'DISABLE':
+        # Based on CONSTRAINT_OT_disable_keep_transform (we can't use it directly, since it relies on UI context)
+        # https://developer.blender.org/diffusion/B/browse/master/release/scripts/startup/bl_operators/constraint.py
+        obj = bpy.context.object
+        if not obj: return 'FAILED'
+        
+        if owner == 'BONE':
+            if obj.type != 'ARMATURE': return 'FAILED'
+            
+            # active_bone is available in more contexts than active_pose_bone
+            active_bone = getattr(bpy.context, "active_bone", None)
+            if not active_bone: return 'FAILED'
+            
+            pose_bone = obj.pose.bones[active_bone.name]
+            constraint = pose_bone.constraints.get(name)
+            if not constraint: return 'FAILED'
+            if constraint.influence == 0.0: return 'DISABLED'
+            
+            mat = obj.matrix_world @ pose_bone.matrix
+            constraint.influence = 0.0
+            pose_bone.matrix = obj.matrix_world.inverted() @ mat
+        else:
+            constraint = obj.constraints.get(name)
+            if not constraint: return 'FAILED'
+            if constraint.influence == 0.0: return 'DISABLED'
+            
+            mat = obj.matrix_world
+            constraint.influence = 0.0
+            obj.matrix_world = mat
+        
+        return 'APPLIED'
+    
+    try:
+        bpy.ops.constraint.apply(constraint=name, owner=owner)
+        return 'APPLIED'
+    except RuntimeError as exc:
+        #print(repr(exc))
+        exc_msg = exc.args[0].lower()
+        # "Error: Modifier is disabled, skipping apply"
+        is_disabled = ("disab" in exc_msg) or ("skip" in exc_msg)
+        return ('DISABLED' if is_disabled else 'FAILED')
+
 def _apply_modifiers(obj, predicate, options=(), apply_as='DATA', which='DEFAULT'):
     covert_to_mesh = ('CONVERT_TO_MESH' in options)
     make_single_user = ('MAKE_SINGLE_USER' in options)
@@ -185,13 +228,52 @@ def _apply_modifiers(obj, predicate, options=(), apply_as='DATA', which='DEFAULT
     
     return objects_to_delete
 
-def apply_modifiers(context, objects, idnames, options=(), apply_as='DATA', which='DEFAULT'):
+def _apply_constraints(obj, predicate, owner='OBJECT', mode='DELETE', bones='ALL'):
+    if owner == 'BONE':
+        if obj.type != 'ARMATURE': return
+        if obj.mode == 'EDIT': return
+        
+        obj_bones = obj.data.bones
+        pose_bones = obj.pose.bones
+        
+        if (bones is None) or (bones == 'ALL'):
+            bones = obj_bones
+        elif bones == 'SELECTED':
+            bones = [bone for bone in obj_bones if bone.select]
+        
+        def activate_bone(bone):
+            # At least for now, Blender doesn't actually update context's active bone
+            # until bone.select is assigned something (even if it's the same value)
+            obj_bones.active = bone
+            bone.select = bone.select
+        
+        active_bone = obj_bones.active
+        
+        for bone in bones:
+            bone_name = (bone if isinstance(bone, str) else bone.name)
+            bone = obj_bones.get(bone_name)
+            if not bone: continue
+            
+            activate_bone(bone)
+            for constraint in tuple(pose_bones[bone.name].constraints):
+                if not predicate(constraint): continue
+                apply_constraint(constraint.name, owner=owner, mode=mode)
+        
+        activate_bone(active_bone)
+    else:
+        for constraint in tuple(obj.constraints):
+            if not predicate(constraint): continue
+            apply_constraint(constraint.name, owner=owner, mode=mode)
+
+def _apply_common(context, objects, idnames, obj_mode, apply_func):
     if not objects: return
     
     scene_objs = context.scene.collection.objects
     layer_objs = context.view_layer.objects
     active_obj = layer_objs.active
     selection_prev = tuple(context.selected_objects)
+    
+    prev_obj_mode = (active_obj.mode if active_obj else 'OBJECT')
     
     if idnames is not None:
         if callable(idnames):
@@ -206,7 +288,9 @@ def apply_modifiers(context, objects, idnames, options=(), apply_as='DATA', whic
     # NOTE: without an active object, mode is OBJECT anyway,
     # which is what we need for bpy.ops.object.select_all()
     layer_objs.active = None
-    bpy.ops.object.select_all(action='DESELECT')
+    
+    if prev_obj_mode == 'OBJECT':
+        bpy.ops.object.select_all(action='DESELECT')
     
     scene_objs_names = {obj.name_full for obj in scene_objs}
     
@@ -230,11 +314,11 @@ def apply_modifiers(context, objects, idnames, options=(), apply_as='DATA', whic
         
         BlUtil.Object.select_set(obj, True)
         
-        if (obj.mode != 'OBJECT') and bpy.ops.object.mode_set.poll():
-            bpy.ops.object.mode_set(mode='OBJECT')
+        if obj_mode and (obj.mode != obj_mode) and bpy.ops.object.mode_set.poll():
+            bpy.ops.object.mode_set(mode=obj_mode)
         
-        if obj.mode == 'OBJECT':
-            objects_to_delete.update(_apply_modifiers(obj, predicate, options, apply_as, which=which))
+        if (not obj_mode) or (obj.mode == obj_mode):
+            objects_to_delete.update(apply_func(obj, predicate) or ())
         
         BlUtil.Object.select_set(obj, False)
         if not in_scene: scene_objs.unlink(obj)
@@ -243,18 +327,39 @@ def apply_modifiers(context, objects, idnames, options=(), apply_as='DATA', whic
         obj.hide_viewport = hide_viewport
     
     deleted_names = set(obj.name for obj in objects_to_delete)
-    for obj in objects_to_delete:
-        BlUtil.Object.select_set(obj, True)
-    bpy.ops.object.delete(confirm=False)
     
-    bpy.ops.object.select_all(action='DESELECT')
-    for obj in selection_prev:
-        if obj.name in deleted_names: continue
-        BlUtil.Object.select_set(obj, True)
+    if (context.mode != prev_obj_mode) and bpy.ops.object.mode_set.poll():
+        bpy.ops.object.mode_set(mode=prev_obj_mode)
+    
+    # Some bpy.ops.object.* operators' poll() may fail in POSE mode
+    if context.mode == 'OBJECT':
+        if deleted_names:
+            for obj in objects_to_delete:
+                BlUtil.Object.select_set(obj, True)
+            bpy.ops.object.delete(confirm=False)
+        
+        bpy.ops.object.select_all(action='DESELECT')
+        for obj in selection_prev:
+            if obj.name in deleted_names: continue
+            BlUtil.Object.select_set(obj, True)
+    
     if active_obj and (active_obj.name in deleted_names): active_obj = None
     layer_objs.active = active_obj
     
     return objects_to_delete
+
+def apply_modifiers(context, objects, idnames, options=(), apply_as='DATA', which='DEFAULT'):
+    def apply_func(obj, predicate):
+        return _apply_modifiers(obj, predicate, options, apply_as, which=which)
+    
+    return _apply_common(context, objects, idnames, 'OBJECT', apply_func)
+
+def apply_constraints(context, objects, idnames, owner='OBJECT', mode='DELETE', bones='ALL'):
+    def apply_func(obj, predicate):
+        return _apply_constraints(obj, predicate, owner=owner, mode=mode, bones=bones)
+    
+    obj_mode = ('POSE' if owner == 'BONE' else None)
+    return _apply_common(context, objects, idnames, obj_mode, apply_func)
 
 # =========================================================================== #
 
@@ -859,6 +964,43 @@ class BlUtil:
                 while BlUtil.Data.clear_orphaned(users_map0, users_map1, self.check):
                     users_map0 = users_map1
                     users_map1 = BlUtil.Data.get_users_map(bpy_datas, self.use_fake_user)
+    
+    class Bones:
+        @staticmethod
+        def active_get(obj=None, pose=False):
+            if not obj:
+                if pose:
+                    if hasattr(bpy.context, "active_pose_bone"): return bpy.context.active_pose_bone
+                else:
+                    if hasattr(bpy.context, "active_bone"): return bpy.context.active_bone
+                
+                obj = bpy.context.object
+            
+            if (not obj) or (obj.type != 'ARMATURE'): return None
+            
+            bone = (obj.data.bones.active if obj.mode != 'EDIT' else obj.data.edit_bones.active)
+            
+            if pose and bone:
+                # In edit mode, edit bones may not correspond to regular or pose bones
+                if obj.mode == 'EDIT': return None
+                bone = obj.pose.bones[bone.name]
+            
+            return bone
+        
+        @staticmethod
+        def active_set(obj, bone):
+            if not obj: obj = bpy.context.object
+            if (not obj) or (obj.type != 'ARMATURE'): return
+            
+            if not isinstance(bone, str): bone = bone.name
+            
+            bones = (obj.data.bones if obj.mode != 'EDIT' else obj.data.edit_bones)
+            bone = bones.get(bone)
+            
+            # At least for now, Blender doesn't actually update context's active bone
+            # until bone.select is assigned something (even if it's the same value)
+            bones.active = bone
+            bone.select = bone.select
     
     class Collection:
         @staticmethod
