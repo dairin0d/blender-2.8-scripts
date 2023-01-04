@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 7, 11),
+    "version": (1, 7, 12),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -1209,6 +1209,11 @@ class MouselookNavigation:
                     self.sculpt_levels0 = modifier.sculpt_levels
                     modifier.sculpt_levels = min(modifier.sculpt_levels, 1)
                     break
+        
+        # Do this after we have stored the current camera pose
+        if self.sv.is_camera and (not self._lock_camera):
+            bpy.ops.view3d.view_camera()
+            self.sv.focus = self.pos.copy()
         
         userprefs.inputs.use_mouse_continuous = True
         userprefs.view.smooth_view = 0
