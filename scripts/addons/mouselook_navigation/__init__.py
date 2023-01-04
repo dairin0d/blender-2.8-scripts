@@ -1394,11 +1394,11 @@ def draw_callback_px(self, context):
         x, y = clickable_rect.min - full_rect.min
         w, h = clickable_rect.size
         
-        shader = gpu.shader.from_builtin('2D_UNIFORM_COLOR')
+        shader = gpu.shader.from_builtin('3D_UNIFORM_COLOR')
         shader.bind()
         with cgl(BLEND=True):
-            verts = [(x + border, y + border), (x + w-border, y + border),
-                (x + w-border, y + h-border), (x + border, y + h-border)]
+            verts = [(x + border, y + border, 0), (x + w-border, y + border, 0),
+                (x + w-border, y + h-border, 0), (x + border, y + h-border, 0)]
             shader.uniform_float("color", (color[0], color[1], color[2], 0.5))
             batch = cgl.batch(shader, 'LINE_LOOP', pos=verts)
             batch.draw(shader)
