@@ -1139,8 +1139,6 @@ class MouselookNavigation:
         
         if is_dyntopo: bpy.ops.sculpt.dynamic_topology_toggle()
         
-        self.update_cursor_icon(context)
-        
         self.color_crosshair_visible = settings.get_color("color_crosshair_visible")
         self.color_crosshair_obscured = settings.get_color("color_crosshair_obscured")
         self.color_zbrush_border = settings.get_color("color_zbrush_border")
@@ -1212,11 +1210,17 @@ class MouselookNavigation:
         
         # Do this after we have stored the current camera pose
         if self.sv.is_camera and (not self._lock_camera):
+            # If we're in camera view and lock-view-to-camera is disabled,
+            # orbiting exits the camera view, BUT panning shifts the viewport
+            if (self.mode_stack.mode == 'PAN'): return {'PASS_THROUGH'}
+            
             bpy.ops.view3d.view_camera()
             self.sv.focus = self.pos.copy()
         
         userprefs.inputs.use_mouse_continuous = True
         userprefs.view.smooth_view = 0
+        
+        self.update_cursor_icon(context)
         
         self.register_handlers(context)
         
