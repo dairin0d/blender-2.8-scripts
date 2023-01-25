@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 7, 12),
+    "version": (1, 7, 13),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -1212,7 +1212,7 @@ class MouselookNavigation:
         if self.sv.is_camera and (not self._lock_camera):
             # If we're in camera view and lock-view-to-camera is disabled,
             # orbiting exits the camera view, BUT panning shifts the viewport
-            if (self.mode_stack.mode == 'PAN'): return {'PASS_THROUGH'}
+            if self.mode_stack.mode == 'PAN': return {'PASS_THROUGH'}
             
             bpy.ops.view3d.view_camera()
             self.sv.focus = self.pos.copy()
@@ -1670,9 +1670,34 @@ class AutoRegKeymapInfo:
         'Weight Paint',
         'Image Paint',
         'Sculpt',
+        'Sculpt Curves',
         'Particle',
         'Grease Pencil',
     ]
+    
+    mode_map = {
+        'EDIT_MESH': 'Mesh',
+        'EDIT_CURVE': 'Curve',
+        'EDIT_CURVES': 'Curve',
+        'EDIT_SURFACE': 'Curve',
+        'EDIT_TEXT': 'Font',
+        'EDIT_ARMATURE': 'Armature',
+        'EDIT_METABALL': 'Metaball',
+        'EDIT_LATTICE': 'Lattice',
+        'POSE': 'Pose',
+        'SCULPT': 'Sculpt',
+        'PAINT_WEIGHT': 'Weight Paint',
+        'PAINT_VERTEX': 'Vertex Paint',
+        'PAINT_TEXTURE': 'Image Paint',
+        'PARTICLE': 'Particle',
+        'OBJECT': 'Object Mode',
+        'PAINT_GPENCIL': 'Image Paint',
+        'EDIT_GPENCIL': 'Grease Pencil',
+        'SCULPT_GPENCIL': 'Sculpt',
+        'WEIGHT_GPENCIL': 'Weight Paint',
+        'VERTEX_GPENCIL': 'Vertex Paint',
+        'SCULPT_CURVES': 'Sculpt Curves',
+    }
     
     keymaps: {'3D View'} | prop("Keymaps", "To which keymaps this entry should be added", items=mode_names)
     value_type: "" | prop("Type of event", "Type of event")
@@ -1699,6 +1724,11 @@ class AutoRegKeymapInfo:
     is_current: False | prop("(Un)select this keymap entry", "(if selected, its settings will be shown below)",
         get=get_is_current, set=set_is_current)
     index: 0 | prop()
+    
+    def is_active(self, context=None):
+        if context is None: context = bpy.context
+        if '3D View' in self.keymaps: return True
+        return self.mode_map.get(context.mode) in self.keymaps
 
 @addon.Operator.execute(idname="mouselook_navigation.autoreg_keymap_add", label="Add Autoreg Keymap")
 def add_autoreg_keymap(self, context):
@@ -2228,7 +2258,7 @@ class ThisAddonPreferences:
     def calc_zbrush_mode(self):
         if self.is_using_default_input_settings:
             return (self.default_input_settings.zbrush_mode != 'NONE')
-        return any((ark.input_settings.zbrush_mode != 'NONE') for ark in self.autoreg_keymaps)
+        return any((ark.input_settings.zbrush_mode != 'NONE') for ark in self.autoreg_keymaps if ark.is_active())
     zbrush_mode: False | prop(get=calc_zbrush_mode)
     
     use_default_keymap: True | prop("Use default keymap", options={'HIDDEN'})
