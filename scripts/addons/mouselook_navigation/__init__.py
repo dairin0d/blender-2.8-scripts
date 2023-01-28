@@ -1212,7 +1212,8 @@ class MouselookNavigation:
         if self.sv.is_camera and (not self._lock_camera):
             # If we're in camera view and lock-view-to-camera is disabled,
             # orbiting exits the camera view, BUT panning shifts the viewport
-            if self.mode_stack.mode == 'PAN': return {'PASS_THROUGH'}
+            # and dolly zooms the viewport
+            if self.mode_stack.mode in ('PAN', 'DOLLY', 'ZOOM'): return {'PASS_THROUGH'}
             
             bpy.ops.view3d.view_camera()
             self.sv.focus = self.pos.copy()
