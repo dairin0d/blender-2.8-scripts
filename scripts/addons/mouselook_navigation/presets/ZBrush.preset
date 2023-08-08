@@ -21,6 +21,7 @@
                 "key_modifier": "NONE",
                 "keymaps": [
                     "Sculpt",
+                    "Sculpt Curves",
                     "Vertex Paint",
                     "Particle",
                     "Image Paint",
@@ -47,6 +48,7 @@
                 "key_modifier": "NONE",
                 "keymaps": [
                     "Sculpt",
+                    "Sculpt Curves",
                     "Vertex Paint",
                     "Particle",
                     "Image Paint",
