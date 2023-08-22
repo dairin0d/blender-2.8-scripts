@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Mouselook Navigation",
     "author": "dairin0d, moth3r",
-    "version": (1, 7, 13),
+    "version": (1, 7, 14),
     "blender": (2, 80, 0),
     "location": "View3D > orbit/pan/dolly/zoom/fly/walk",
     "description": "Provides extra 3D view navigation options (ZBrush mode) and customizability",
@@ -1163,6 +1163,12 @@ class MouselookNavigation:
         
         self.fly_speed = Vector()
         
+        # For some reason, Blender may seriously lag in edit mode when
+        # lots of elements are selected and this preference is enabled
+        # (though this affects only the addon, not the default orbiting)
+        self._use_rotate_around_active = userprefs.inputs.use_rotate_around_active
+        userprefs.inputs.use_rotate_around_active = False
+        
         # Starting from Blender 2.80, enabling the "Lock Camera to View" option
         # makes Blender take control of the camera matrix, so manipulating the
         # camera from scipt doesn't have any effect.
@@ -1293,6 +1299,9 @@ class MouselookNavigation:
         self.mode_stack.mode = None # used for setting mouse position
     
     def cleanup(self, context):
+        userprefs = context.preferences
+        userprefs.inputs.use_rotate_around_active = self._use_rotate_around_active
+        
         # Whether the navigation was confirmed or canceled,
         # we need to revert lock_camera to its initial state
         self.sv.lock_camera = self._lock_camera
